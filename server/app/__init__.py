@@ -1,0 +1,2 @@
+"""FreshLedger FastAPI service."""
+
