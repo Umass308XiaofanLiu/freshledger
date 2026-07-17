@@ -29,7 +29,8 @@
           "cameraPermission": "FreshLedger uses the camera to photograph a grocery receipt.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-font"
     ]
   }
 }

@@ -9,3 +9,5 @@ All timestamps are US Eastern Time.
 | 2026-07-17 02:59 EDT | Expo web export | PASS | SDK 57 Metro bundle exported successfully to ignored `app/dist/`. |
 | 2026-07-17 03:01 EDT | Local FastAPI smoke | PARTIAL | `/health` returned 200; authenticated multipart upload reached `OPENAI_NOT_CONFIGURED`, confirming the expected missing `server/.env` blocker. |
 | 2026-07-17 03:02 EDT | Expo Doctor | PASS | 20/20 project checks passed. |
+| 2026-07-17 03:12 EDT | Expo browser visual smoke | PASS | Initial receipt-scan screen rendered in the Codex in-app browser. The check exposed a missing Paper icon dependency; `@expo/vector-icons` and its required `expo-font` peer were added, and the photo icon then rendered correctly. |
+| 2026-07-17 03:14 EDT | D0 regression gate | PASS | Server: 6 tests passed. App: TypeScript passed, SDK 57 web export passed, and Expo Doctor passed 20/20. Browser logs contain only upstream React Native Web style deprecation warnings. |
