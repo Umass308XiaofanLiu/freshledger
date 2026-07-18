@@ -144,7 +144,7 @@ npx expo export --platform web
 ```
 
 Current result: **132 server tests passed**, Expo TypeScript passed, Expo Doctor
-passed **20/20**, and the SDK 57 Web production export bundled 527 modules.
+passed **20/20**, and the SDK 57 Web production export bundled 528 modules.
 A browser end-to-end test also completed Local OCR upload → 5-item review →
 confirm → pantry, while `ai_call_usage` remained zero.
 
