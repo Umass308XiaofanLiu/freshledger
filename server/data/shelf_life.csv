@@ -1,0 +1,105 @@
+canonical_key,display_name,category,recommended_method,fridge_days,freezer_days,pantry_days,temp_c,eat_by_start_days,best_by_days,aliases,notes
+baby_spinach,Baby spinach,produce,fridge,5,180,,4,2,5,"[""spinach"",""baby spinach""]",Fresh unopened produce; use sooner if wilted or slimy.
+banana,Bananas,produce,pantry,7,60,5,20,3,5,"[""banana"",""bananas""]",Whole uncut fruit; refrigerate ripe fruit to slow ripening.
+apple,Apples,produce,fridge,28,240,14,4,21,28,"[""apple"",""apples""]",Whole uncut fruit; discard moldy or deeply damaged fruit.
+blackberries,Blackberries,produce,fridge,3,240,,4,1,3,"[""blackberry"",""blackberries""]",Fresh berries; keep dry and refrigerate promptly.
+strawberries,Strawberries,produce,fridge,3,240,,4,1,3,"[""strawberry"",""strawberries""]",Fresh berries; keep dry and refrigerate promptly.
+blueberries,Blueberries,produce,fridge,7,240,,4,4,7,"[""blueberry"",""blueberries""]",Fresh berries; keep dry and refrigerate promptly.
+raspberries,Raspberries,produce,fridge,2,240,,4,1,2,"[""raspberry"",""raspberries""]",Fresh berries; very perishable; keep dry and cold.
+leaf_lettuce,Leaf lettuce,produce,fridge,5,180,,4,3,5,"[""lettuce"",""leaf lettuce"",""romaine""]",Fresh whole leaves; use sooner once cut or washed.
+broccoli,Broccoli,produce,fridge,5,240,,4,3,5,"[""broccoli"",""broccoli crowns""]",Fresh raw produce; refrigerate in the crisper.
+cauliflower,Cauliflower,produce,fridge,5,240,,4,3,5,"[""cauliflower""]",Fresh raw produce; refrigerate in the crisper.
+carrots,Carrots,produce,fridge,14,240,,4,10,14,"[""carrot"",""carrots""]",Fresh whole carrots; use sooner once peeled or cut.
+celery,Celery,produce,fridge,14,240,,4,10,14,"[""celery"",""celery hearts""]",Fresh whole stalks; refrigerate in the crisper.
+bell_pepper,Bell peppers,produce,fridge,7,240,,4,5,7,"[""bell pepper"",""sweet pepper"",""peppers""]",Fresh whole peppers; use sooner once cut.
+cucumber,Cucumbers,produce,fridge,5,180,,4,3,5,"[""cucumber"",""cucumbers""]",Fresh whole cucumbers; use sooner once cut.
+tomato,Tomatoes,produce,pantry,5,60,5,20,3,5,"[""tomato"",""tomatoes""]",Whole uncut tomatoes; refrigerate after cutting.
+avocado,Avocados,produce,pantry,3,120,4,20,2,4,"[""avocado"",""avocados""]",Whole fruit until ripe; refrigerate ripe or cut avocado.
+grapes,Grapes,produce,fridge,7,240,,4,5,7,"[""grape"",""grapes""]",Fresh grapes; keep dry and refrigerate promptly.
+orange,Oranges,produce,fridge,14,240,7,4,10,14,"[""orange"",""oranges""]",Whole uncut citrus; refrigerate cut fruit.
+lemon,Lemons,produce,fridge,21,120,7,4,14,21,"[""lemon"",""lemons""]",Whole uncut citrus; refrigerate cut fruit.
+mushrooms,Mushrooms,produce,fridge,5,240,,4,3,5,"[""mushroom"",""mushrooms""]",Fresh raw mushrooms; keep refrigerated and dry.
+green_beans,Green beans,produce,fridge,5,240,,4,3,5,"[""green beans"",""string beans""]",Fresh raw beans; refrigerate in the crisper.
+asparagus,Asparagus,produce,fridge,3,240,,4,1,3,"[""asparagus""]",Fresh raw asparagus; keep cold and use promptly.
+cabbage,Cabbage,produce,fridge,14,240,,4,10,14,"[""cabbage"",""green cabbage""]",Whole head; use sooner after cutting.
+potato,Potatoes,produce,pantry,,240,30,20,21,30,"[""potato"",""potatoes""]",Store uncut in a cool dark ventilated place; discard green potatoes.
+onion,Dry onions,produce,pantry,7,180,30,20,21,30,"[""onion"",""onions"",""yellow onion""]",Whole dry onions; refrigerate after cutting.
+whole_milk,Whole milk,dairy,fridge,7,90,,4,5,7,"[""whole milk"",""gallon milk""]",Opened refrigerated milk; follow an earlier package date.
+skim_milk,Skim milk,dairy,fridge,7,90,,4,5,7,"[""skim milk"",""nonfat milk""]",Opened refrigerated milk; follow an earlier package date.
+buttermilk,Buttermilk,dairy,fridge,7,90,,4,5,7,"[""buttermilk""]",Opened refrigerated cultured milk; follow package directions.
+plain_yogurt,Plain yogurt,dairy,fridge,14,60,,4,10,14,"[""plain yogurt"",""yogurt""]",Refrigerated opened yogurt; discard if mold appears.
+greek_yogurt,Greek yogurt,dairy,fridge,14,60,,4,10,14,"[""greek yogurt""]",Refrigerated opened yogurt; follow an earlier package date.
+cottage_cheese,Cottage cheese,dairy,fridge,7,90,,4,5,7,"[""cottage cheese""]",Opened soft cheese; keep tightly covered and refrigerated.
+cream_cheese,Cream cheese,dairy,fridge,14,60,,4,10,14,"[""cream cheese""]",Opened cream cheese; keep tightly covered and refrigerated.
+hard_cheese,Hard cheese,dairy,fridge,21,180,,4,14,21,"[""hard cheese"",""cheddar"",""parmesan""]",Opened hard cheese; trim only according to USDA mold guidance.
+butter,Butter,dairy,fridge,60,270,,4,45,60,"[""butter"",""salted butter"",""unsalted butter""]",Opened butter; keep wrapped to prevent odor absorption.
+margarine,Margarine,dairy,fridge,180,365,,4,150,180,"[""margarine""]",Opened refrigerated spread; follow an earlier package date.
+sour_cream,Sour cream,dairy,fridge,14,60,,4,10,14,"[""sour cream""]",Opened cultured dairy; discard if mold appears.
+whipping_cream,Whipping cream,dairy,fridge,7,60,,4,5,7,"[""whipping cream"",""heavy cream""]",Opened refrigerated cream; follow an earlier package date.
+raw_chicken_breast,Raw chicken breast,meat,fridge,2,270,,4,1,2,"[""chicken breast"",""raw chicken breast""]",Raw poultry; refrigerate at once or freeze for longer storage.
+whole_raw_chicken,Whole raw chicken,meat,fridge,2,365,,4,1,2,"[""whole chicken"",""raw chicken""]",Raw poultry; refrigerate at once or freeze for longer storage.
+whole_raw_turkey,Whole raw turkey,meat,fridge,2,365,,4,1,2,"[""whole turkey"",""raw turkey""]",Raw poultry; refrigerate at once or freeze for longer storage.
+ground_beef,Ground beef,meat,fridge,2,120,,4,1,2,"[""ground beef"",""hamburger meat""]",Raw ground meat; refrigerate at once or freeze for longer storage.
+beef_steak,Beef steaks,meat,fridge,5,365,,4,3,5,"[""beef steak"",""steaks""]",Raw intact beef; refrigerate at once or freeze for longer storage.
+beef_roast,Beef roast,meat,fridge,5,365,,4,3,5,"[""beef roast"",""roast beef raw""]",Raw intact beef; refrigerate at once or freeze for longer storage.
+pork_chop,Pork chops,meat,fridge,5,180,,4,3,5,"[""pork chop"",""pork chops""]",Raw intact pork; refrigerate at once or freeze for longer storage.
+pork_roast,Pork roast,meat,fridge,5,180,,4,3,5,"[""pork roast""]",Raw intact pork; refrigerate at once or freeze for longer storage.
+lamb_chop,Lamb chops,meat,fridge,5,180,,4,3,5,"[""lamb chop"",""lamb chops""]",Raw intact lamb; refrigerate at once or freeze for longer storage.
+raw_sausage,Raw sausage,meat,fridge,2,60,,4,1,2,"[""raw sausage"",""fresh sausage""]",Raw meat or poultry sausage; keep refrigerated.
+bacon,Bacon,meat,fridge,7,30,,4,5,7,"[""bacon""]",Opened refrigerated bacon; freeze for longer quality storage.
+cooked_ham_slices,Cooked ham slices,meat,fridge,3,60,,4,2,3,"[""ham slices"",""sliced ham""]",Opened or sliced fully cooked ham.
+opened_hot_dogs,Opened hot dogs,deli,fridge,7,60,,4,5,7,"[""hot dogs"",""franks""]",Opened package; keep refrigerated.
+deli_lunch_meat,Deli lunch meat,deli,fridge,3,60,,4,2,3,"[""lunch meat"",""deli meat"",""cold cuts""]",Opened or deli-sliced luncheon meat.
+fresh_salmon,Fresh salmon,seafood,fridge,2,90,,4,1,2,"[""salmon"",""salmon fillet""]",Raw fresh fish; refrigerate at once or freeze.
+fresh_cod,Fresh cod,seafood,fridge,2,180,,4,1,2,"[""cod"",""cod fillet""]",Raw fresh lean fish; refrigerate at once or freeze.
+fresh_tilapia,Fresh tilapia,seafood,fridge,2,180,,4,1,2,"[""tilapia"",""tilapia fillet""]",Raw fresh lean fish; refrigerate at once or freeze.
+fresh_tuna,Fresh tuna,seafood,fridge,2,90,,4,1,2,"[""fresh tuna"",""tuna steak""]",Raw fresh fatty fish; refrigerate at once or freeze.
+fresh_trout,Fresh trout,seafood,fridge,2,90,,4,1,2,"[""trout"",""trout fillet""]",Raw fresh fatty fish; refrigerate at once or freeze.
+raw_shrimp,Raw shrimp,seafood,fridge,2,180,,4,1,2,"[""shrimp"",""raw shrimp""]",Raw shellfish; refrigerate at once or freeze.
+raw_scallops,Raw scallops,seafood,fridge,2,90,,4,1,2,"[""scallops"",""raw scallops""]",Raw shellfish; refrigerate at once or freeze.
+fresh_crab,Fresh crab meat,seafood,fridge,2,90,,4,1,2,"[""crab meat"",""fresh crab""]",Fresh cooked or picked crab; keep very cold.
+fresh_lobster,Fresh lobster meat,seafood,fridge,2,90,,4,1,2,"[""lobster meat"",""fresh lobster""]",Fresh cooked or picked lobster; keep very cold.
+fresh_oysters,Fresh shucked oysters,seafood,fridge,2,90,,4,1,2,"[""oysters"",""shucked oysters""]",Shucked shellfish; keep very cold and use promptly.
+sourdough_bread,Sourdough bread,bakery,pantry,7,90,4,20,3,4,"[""sourdough"",""sourdough bread""]",Fresh bakery loaf at room temperature; freeze for longer storage.
+sandwich_bread,Sandwich bread,bakery,pantry,7,90,5,20,3,5,"[""sandwich bread"",""sliced bread""]",Commercial or fresh loaf; follow an earlier package date.
+bagels,Bagels,bakery,pantry,7,90,5,20,3,5,"[""bagel"",""bagels""]",Room-temperature bread product; freeze for longer storage.
+dinner_rolls,Dinner rolls,bakery,pantry,7,90,5,20,3,5,"[""dinner rolls"",""bread rolls""]",Room-temperature bread product; freeze for longer storage.
+tortillas,Tortillas,bakery,pantry,14,180,7,20,5,7,"[""tortilla"",""tortillas""]",Opened shelf-stable package; follow an earlier package date.
+muffins,Muffins,bakery,pantry,7,90,4,20,2,4,"[""muffin"",""muffins""]",Fresh bakery muffins; freeze for longer storage.
+unfrosted_cake,Unfrosted cake,bakery,pantry,5,90,3,20,2,3,"[""unfrosted cake"",""plain cake""]",Cake without perishable filling or frosting.
+cookies,Cookies,bakery,pantry,,180,14,20,10,14,"[""cookie"",""cookies""]",Baked cookies without perishable filling.
+fruit_pie,Fruit pie,bakery,fridge,4,120,2,4,3,4,"[""fruit pie"",""apple pie""]",Baked fruit pie; refrigerate for conservative handling.
+doughnuts,Doughnuts,bakery,pantry,3,60,2,20,1,2,"[""doughnut"",""donut"",""donuts""]",No perishable cream filling; filled products should be refrigerated.
+frozen_mixed_vegetables,Frozen mixed vegetables,frozen,freezer,,240,,-18,180,240,"[""frozen vegetables"",""mixed vegetables""]",Keep continuously frozen; freezer time is for quality.
+frozen_berries,Frozen berries,frozen,freezer,,240,,-18,180,240,"[""frozen berries"",""frozen mixed berries"",""berry blend""]",Keep continuously frozen; freezer time is for quality.
+frozen_pizza,Frozen pizza,frozen,freezer,,60,,-18,45,60,"[""frozen pizza""]",Keep continuously frozen; freezer time is for quality.
+frozen_entree,Frozen entree,frozen,freezer,,90,,-18,60,90,"[""frozen entree"",""frozen dinner""]",Keep continuously frozen; follow an earlier package date.
+ice_cream,Ice cream,frozen,freezer,,60,,-18,45,60,"[""ice cream""]",Keep continuously frozen; discard after prolonged thawing.
+frozen_chicken_nuggets,Frozen chicken nuggets,frozen,freezer,,90,,-18,60,90,"[""chicken nuggets"",""frozen nuggets""]",Keep continuously frozen; cook according to package directions.
+frozen_french_fries,Frozen french fries,frozen,freezer,,180,,-18,120,180,"[""french fries"",""frozen fries""]",Keep continuously frozen; freezer time is for quality.
+frozen_fish_fillets,Frozen fish fillets,frozen,freezer,,180,,-18,120,180,"[""frozen fish"",""fish fillets frozen""]",Keep continuously frozen; freezer time is for quality.
+opened_fruit_juice,Opened fruit juice,beverage,fridge,7,240,,4,5,7,"[""fruit juice"",""juice opened""]",Opened pasteurized juice; keep refrigerated.
+orange_juice,Orange juice,beverage,fridge,7,240,,4,5,7,"[""orange juice""]",Opened pasteurized juice; keep refrigerated.
+apple_cider,Apple cider,beverage,fridge,7,240,,4,5,7,"[""apple cider""]",Opened pasteurized cider; keep refrigerated.
+plant_milk,Plant-based milk,beverage,fridge,7,90,,4,5,7,"[""almond milk"",""oat milk"",""soy milk""]",Opened refrigerated or shelf-stable beverage; follow package directions.
+brewed_coffee,Brewed coffee,beverage,fridge,3,,,4,2,3,"[""brewed coffee"",""cold coffee""]",Plain brewed coffee; milk or cream additions may shorten storage.
+brewed_tea,Brewed tea,beverage,fridge,3,,,4,2,3,"[""brewed tea"",""iced tea""]",Plain brewed tea; milk additions may shorten storage.
+white_rice,Dry white rice,pantry_staple,pantry,,,365,20,270,365,"[""white rice"",""dry rice"",""rice""]",Dry uncooked product in a sealed container; keep cool and dry.
+dry_pasta,Dry pasta,pantry_staple,pantry,,,365,20,270,365,"[""dry pasta"",""pasta"",""spaghetti""]",Dry uncooked product in a sealed container; keep cool and dry.
+all_purpose_flour,All-purpose flour,pantry_staple,pantry,,365,180,20,120,180,"[""all purpose flour"",""flour""]",Dry product in a sealed container; discard if insects or rancid odor appear.
+granulated_sugar,Granulated sugar,pantry_staple,pantry,,,365,20,270,365,"[""granulated sugar"",""white sugar"",""sugar""]",Keep dry in a sealed container.
+table_salt,Table salt,pantry_staple,pantry,,,730,20,365,730,"[""table salt"",""salt""]",Keep dry in a sealed container; quality limit only.
+rolled_oats,Rolled oats,pantry_staple,pantry,,,180,20,120,180,"[""rolled oats"",""oatmeal"",""oats""]",Dry product in a sealed container; discard if rancid.
+breakfast_cereal,Breakfast cereal,pantry_staple,pantry,,,180,20,120,180,"[""breakfast cereal"",""cereal""]",Opened dry cereal in a sealed container; follow package date.
+dry_beans,Dry beans,pantry_staple,pantry,,,365,20,270,365,"[""dry beans"",""dried beans""]",Dry uncooked beans in a sealed container; keep cool and dry.
+dry_lentils,Dry lentils,pantry_staple,pantry,,,365,20,270,365,"[""dry lentils"",""lentils""]",Dry uncooked lentils in a sealed container; keep cool and dry.
+canned_beans,Canned beans,pantry_staple,pantry,4,,365,20,270,365,"[""canned beans"",""canned black beans"",""beans canned""]",Unopened low-acid can; refrigerate after opening and use within 4 days.
+canned_tomatoes,Canned tomatoes,pantry_staple,pantry,5,,365,20,270,365,"[""canned tomatoes"",""tomatoes canned""]",Unopened high-acid can; refrigerate after opening and use within 5 days.
+peanut_butter,Peanut butter,pantry_staple,pantry,120,,90,20,60,90,"[""peanut butter""]",Opened commercial product; follow label if refrigeration is required.
+cooking_oil,Cooking oil,pantry_staple,pantry,,,180,20,120,180,"[""cooking oil"",""vegetable oil"",""olive oil""]",Opened oil; keep tightly closed away from heat and light.
+vinegar,Vinegar,pantry_staple,pantry,,,365,20,270,365,"[""vinegar"",""white vinegar""]",Keep tightly closed away from heat and light; quality limit only.
+honey,Honey,pantry_staple,pantry,,,365,20,270,365,"[""honey""]",Keep tightly closed at room temperature; crystallization is not spoilage.
+eggs,Eggs,dairy,fridge,21,,,4,14,21,"[""eggs"",""large eggs"",""shell eggs"",""dozen eggs""]",Raw shell eggs refrigerated promptly; do not freeze in shell.
+mixed_greens,Mixed greens,produce,fridge,5,,,4,2,5,"[""mixed greens"",""spring mix"",""salad greens""]",Fresh bagged greens; use sooner if wilted or slimy.
+deli_turkey,Deli turkey,deli,fridge,3,30,,4,2,3,"[""deli turkey"",""sliced turkey"",""turkey lunch meat""]",Opened or deli-sliced luncheon meat; conservative lower end of federal range.
+sparkling_water,Sparkling water,beverage,pantry,,,180,20,120,180,"[""sparkling water"",""seltzer water"",""carbonated water""]",Unopened shelf-stable beverage; refrigerate after opening and follow label.

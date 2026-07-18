@@ -1,0 +1,181 @@
+{
+  "store_name": "Cedar Lane Demo Foods",
+  "purchased_at": "2026-07-16",
+  "subtotal": 62.41,
+  "tax": 0.0,
+  "total": 62.41,
+  "overall_confidence": 0.98,
+  "image_quality_issue": null,
+  "items": [
+    {
+      "raw_text": "SALMON FILLET 1.18LB     14.15",
+      "name": "Salmon fillet",
+      "canonical_key": "raw_salmon",
+      "qty": 1.18,
+      "unit": "lb",
+      "unit_price": 11.99,
+      "line_total": 14.15,
+      "category": "seafood",
+      "is_perishable": true,
+      "storage": {
+        "method": "fridge",
+        "temp_c": 4,
+        "duration_days": 2
+      },
+      "eat_by_window": {
+        "start_days": 1,
+        "end_days": 2
+      },
+      "confidence": 0.98,
+      "needs_review": false
+    },
+    {
+      "raw_text": "GROUND BEEF 1.35LB        8.76",
+      "name": "Ground beef",
+      "canonical_key": "raw_ground_beef",
+      "qty": 1.35,
+      "unit": "lb",
+      "unit_price": 6.49,
+      "line_total": 8.76,
+      "category": "meat",
+      "is_perishable": true,
+      "storage": {
+        "method": "fridge",
+        "temp_c": 4,
+        "duration_days": 2
+      },
+      "eat_by_window": {
+        "start_days": 1,
+        "end_days": 2
+      },
+      "confidence": 0.98,
+      "needs_review": false
+    },
+    {
+      "raw_text": "MIXED GREENS 5OZ          3.79",
+      "name": "Mixed greens",
+      "canonical_key": "mixed_greens",
+      "qty": 1,
+      "unit": "each",
+      "unit_price": 3.79,
+      "line_total": 3.79,
+      "category": "produce",
+      "is_perishable": true,
+      "storage": {
+        "method": "fridge",
+        "temp_c": 4,
+        "duration_days": 5
+      },
+      "eat_by_window": {
+        "start_days": 2,
+        "end_days": 5
+      },
+      "confidence": 0.98,
+      "needs_review": false
+    },
+    {
+      "raw_text": "AVOCADOS X3               3.75",
+      "name": "Avocados",
+      "canonical_key": "avocado",
+      "qty": 3,
+      "unit": "each",
+      "unit_price": 1.25,
+      "line_total": 3.75,
+      "category": "produce",
+      "is_perishable": true,
+      "storage": {
+        "method": "pantry",
+        "temp_c": 21,
+        "duration_days": 4
+      },
+      "eat_by_window": {
+        "start_days": 2,
+        "end_days": 4
+      },
+      "confidence": 0.98,
+      "needs_review": false
+    },
+    {
+      "raw_text": "DELI TURKEY 0.75LB        7.49",
+      "name": "Sliced deli turkey",
+      "canonical_key": "deli_turkey",
+      "qty": 0.75,
+      "unit": "lb",
+      "unit_price": 9.99,
+      "line_total": 7.49,
+      "category": "deli",
+      "is_perishable": true,
+      "storage": {
+        "method": "fridge",
+        "temp_c": 4,
+        "duration_days": 4
+      },
+      "eat_by_window": {
+        "start_days": 3,
+        "end_days": 4
+      },
+      "confidence": 0.98,
+      "needs_review": false
+    },
+    {
+      "raw_text": "CHEDDAR CHEESE 8OZ        5.99",
+      "name": "Cheddar cheese",
+      "canonical_key": "cheddar_cheese",
+      "qty": 1,
+      "unit": "each",
+      "unit_price": 5.99,
+      "line_total": 5.99,
+      "category": "dairy",
+      "is_perishable": true,
+      "storage": {
+        "method": "fridge",
+        "temp_c": 4,
+        "duration_days": 21
+      },
+      "eat_by_window": {
+        "start_days": 14,
+        "end_days": 21
+      },
+      "confidence": 0.98,
+      "needs_review": false
+    },
+    {
+      "raw_text": "SPARKLING WATER 8PK       5.49",
+      "name": "Sparkling water",
+      "canonical_key": "sparkling_water",
+      "qty": 1,
+      "unit": "pack",
+      "unit_price": 5.49,
+      "line_total": 5.49,
+      "category": "beverage",
+      "is_perishable": false,
+      "storage": {
+        "method": "pantry",
+        "temp_c": 21,
+        "duration_days": 180
+      },
+      "eat_by_window": null,
+      "confidence": 0.98,
+      "needs_review": false
+    },
+    {
+      "raw_text": "EXTRA VIRGIN OLIVE OIL   12.99",
+      "name": "Extra-virgin olive oil",
+      "canonical_key": "olive_oil",
+      "qty": 1,
+      "unit": "each",
+      "unit_price": 12.99,
+      "line_total": 12.99,
+      "category": "pantry_staple",
+      "is_perishable": false,
+      "storage": {
+        "method": "pantry",
+        "temp_c": 21,
+        "duration_days": 365
+      },
+      "eat_by_window": null,
+      "confidence": 0.98,
+      "needs_review": false
+    }
+  ]
+}

@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 import base64
+from functools import lru_cache
 
 from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI, RateLimitError
+from pydantic import ValidationError
 
 from ..config import get_settings
 from ..errors import AppError
 from ..models import ReceiptParse
 from ..prompts import RECEIPT_SYSTEM_PROMPT
+from .usage import reserve_ai_call
+
+
+@lru_cache(maxsize=2)
+def _openai_client(api_key: str) -> AsyncOpenAI:
+    return AsyncOpenAI(api_key=api_key, timeout=60.0, max_retries=1)
 
 
 async def parse_receipt_image(jpeg_bytes: bytes) -> ReceiptParse:
@@ -20,8 +28,10 @@ async def parse_receipt_image(jpeg_bytes: bytes) -> ReceiptParse:
             "The receipt reader is not configured yet — please try again shortly.",
         )
 
+    reserve_ai_call("receipt_scan")
+
     image_url = "data:image/jpeg;base64," + base64.b64encode(jpeg_bytes).decode("ascii")
-    client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=60.0, max_retries=1)
+    client = _openai_client(settings.openai_api_key)
 
     try:
         response = await client.responses.parse(
@@ -56,10 +66,24 @@ async def parse_receipt_image(jpeg_bytes: bytes) -> ReceiptParse:
             "The AI kitchen is busy — try again in a few seconds.",
         ) from exc
     except APIStatusError as exc:
+        if exc.status_code >= 500:
+            raise AppError(
+                504,
+                "AI_TIMEOUT",
+                f"The OpenAI API returned transient status {exc.status_code}.",
+                "The AI kitchen is busy — try again in a few seconds.",
+            ) from exc
         raise AppError(
             502,
             "AI_ERROR",
             f"The OpenAI API returned status {exc.status_code}.",
+            "The receipt reader hiccuped — please try scanning again.",
+        ) from exc
+    except ValidationError as exc:
+        raise AppError(
+            502,
+            "PARSE_FAILED",
+            f"The structured receipt response failed validation: {exc}",
             "The receipt reader hiccuped — please try scanning again.",
         ) from exc
 
@@ -72,4 +96,3 @@ async def parse_receipt_image(jpeg_bytes: bytes) -> ReceiptParse:
             "The receipt reader hiccuped — please try scanning again.",
         )
     return parsed
-

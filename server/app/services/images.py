@@ -21,7 +21,12 @@ def _looks_like_supported_image(data: bytes) -> bool:
     is_jpeg = data.startswith(b"\xff\xd8\xff")
     is_png = data.startswith(b"\x89PNG\r\n\x1a\n")
     is_webp = len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP"
-    is_heif = len(data) >= 12 and data[4:8] == b"ftyp"
+    heif_brands = {b"heic", b"heix", b"hevc", b"hevx", b"mif1", b"msf1", b"avif", b"avis"}
+    is_heif = (
+        len(data) >= 12
+        and data[4:8] == b"ftyp"
+        and data[8:12] in heif_brands
+    )
     return is_jpeg or is_png or is_webp or is_heif
 
 
@@ -35,8 +40,18 @@ def prepare_receipt_image(data: bytes) -> bytes:
 
     try:
         with Image.open(BytesIO(data)) as source:
+            width, height = source.size
+            if width <= 0 or height <= 0 or width * height > MAX_IMAGE_PIXELS:
+                raise AppError(
+                    413,
+                    "IMAGE_TOO_LARGE",
+                    "The image pixel count exceeded the safe limit.",
+                    "That photo is too large — choose a smaller version.",
+                )
             source.load()
             image = ImageOps.exif_transpose(source).convert("RGB")
+    except AppError:
+        raise
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         raise AppError(415, "UNSUPPORTED_IMAGE", "The image could not be decoded.", "That photo could not be opened — try JPEG or PNG.") from exc
     except Image.DecompressionBombError as exc:
@@ -55,4 +70,3 @@ def prepare_receipt_image(data: bytes) -> bytes:
     output = BytesIO()
     image.save(output, format="JPEG", quality=80, optimize=True)
     return output.getvalue()
-

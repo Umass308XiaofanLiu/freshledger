@@ -1,0 +1,121 @@
+{
+  "store_name": "Fresh Basket Lab",
+  "purchased_at": "2026-07-12",
+  "subtotal": 23.8,
+  "tax": 0.0,
+  "total": 23.8,
+  "overall_confidence": 0.98,
+  "image_quality_issue": null,
+  "items": [
+    {
+      "raw_text": "BABY SPINACH 5OZ          3.49",
+      "name": "Baby spinach",
+      "canonical_key": "baby_spinach",
+      "qty": 1,
+      "unit": "each",
+      "unit_price": 3.49,
+      "line_total": 3.49,
+      "category": "produce",
+      "is_perishable": true,
+      "storage": {
+        "method": "fridge",
+        "temp_c": 4,
+        "duration_days": 5
+      },
+      "eat_by_window": {
+        "start_days": 2,
+        "end_days": 5
+      },
+      "confidence": 0.98,
+      "needs_review": false
+    },
+    {
+      "raw_text": "WHOLE MILK 1GAL           4.29",
+      "name": "Whole milk",
+      "canonical_key": "whole_milk",
+      "qty": 1,
+      "unit": "gallon",
+      "unit_price": 4.29,
+      "line_total": 4.29,
+      "category": "dairy",
+      "is_perishable": true,
+      "storage": {
+        "method": "fridge",
+        "temp_c": 4,
+        "duration_days": 7
+      },
+      "eat_by_window": {
+        "start_days": 5,
+        "end_days": 7
+      },
+      "confidence": 0.98,
+      "needs_review": false
+    },
+    {
+      "raw_text": "CHICKEN BREAST 1.72LB     9.44",
+      "name": "Chicken breast",
+      "canonical_key": "raw_chicken_breast",
+      "qty": 1.72,
+      "unit": "lb",
+      "unit_price": 5.49,
+      "line_total": 9.44,
+      "category": "meat",
+      "is_perishable": true,
+      "storage": {
+        "method": "fridge",
+        "temp_c": 4,
+        "duration_days": 2
+      },
+      "eat_by_window": {
+        "start_days": 1,
+        "end_days": 2
+      },
+      "confidence": 0.98,
+      "needs_review": false
+    },
+    {
+      "raw_text": "SOURDOUGH LOAF            4.99",
+      "name": "Sourdough bread",
+      "canonical_key": "sourdough_bread",
+      "qty": 1,
+      "unit": "each",
+      "unit_price": 4.99,
+      "line_total": 4.99,
+      "category": "bakery",
+      "is_perishable": true,
+      "storage": {
+        "method": "pantry",
+        "temp_c": 21,
+        "duration_days": 4
+      },
+      "eat_by_window": {
+        "start_days": 3,
+        "end_days": 4
+      },
+      "confidence": 0.98,
+      "needs_review": false
+    },
+    {
+      "raw_text": "BANANAS 2.31LB            1.59",
+      "name": "Bananas",
+      "canonical_key": "banana",
+      "qty": 2.31,
+      "unit": "lb",
+      "unit_price": 0.69,
+      "line_total": 1.59,
+      "category": "produce",
+      "is_perishable": true,
+      "storage": {
+        "method": "pantry",
+        "temp_c": 21,
+        "duration_days": 5
+      },
+      "eat_by_window": {
+        "start_days": 3,
+        "end_days": 5
+      },
+      "confidence": 0.98,
+      "needs_review": false
+    }
+  ]
+}

@@ -1,0 +1,152 @@
+{
+  "store_name": "Northwood Test Grocer",
+  "purchased_at": "2026-07-14",
+  "subtotal": 41.41,
+  "tax": 0.47,
+  "total": 41.88,
+  "overall_confidence": 0.98,
+  "image_quality_issue": null,
+  "items": [
+    {
+      "raw_text": "LARGE EGGS 1DOZ           5.19",
+      "name": "Large eggs",
+      "canonical_key": "eggs",
+      "qty": 1,
+      "unit": "dozen",
+      "unit_price": 5.19,
+      "line_total": 5.19,
+      "category": "dairy",
+      "is_perishable": true,
+      "storage": {
+        "method": "fridge",
+        "temp_c": 4,
+        "duration_days": 21
+      },
+      "eat_by_window": {
+        "start_days": 14,
+        "end_days": 21
+      },
+      "confidence": 0.98,
+      "needs_review": false
+    },
+    {
+      "raw_text": "PLAIN GREEK YOGURT 4PK    6.49",
+      "name": "Plain Greek yogurt",
+      "canonical_key": "greek_yogurt",
+      "qty": 1,
+      "unit": "pack",
+      "unit_price": 6.49,
+      "line_total": 6.49,
+      "category": "dairy",
+      "is_perishable": true,
+      "storage": {
+        "method": "fridge",
+        "temp_c": 4,
+        "duration_days": 10
+      },
+      "eat_by_window": {
+        "start_days": 7,
+        "end_days": 10
+      },
+      "confidence": 0.98,
+      "needs_review": false
+    },
+    {
+      "raw_text": "FROZEN MIXED BERRIES      8.99",
+      "name": "Frozen mixed berries",
+      "canonical_key": "frozen_mixed_berries",
+      "qty": 1,
+      "unit": "pack",
+      "unit_price": 8.99,
+      "line_total": 8.99,
+      "category": "frozen",
+      "is_perishable": true,
+      "storage": {
+        "method": "freezer",
+        "temp_c": -18,
+        "duration_days": 180
+      },
+      "eat_by_window": {
+        "start_days": 120,
+        "end_days": 180
+      },
+      "confidence": 0.98,
+      "needs_review": false
+    },
+    {
+      "raw_text": "LONG GRAIN RICE 5LB       4.79",
+      "name": "Long-grain rice",
+      "canonical_key": "dry_white_rice",
+      "qty": 1,
+      "unit": "pack",
+      "unit_price": 4.79,
+      "line_total": 4.79,
+      "category": "pantry_staple",
+      "is_perishable": false,
+      "storage": {
+        "method": "pantry",
+        "temp_c": 21,
+        "duration_days": 365
+      },
+      "eat_by_window": null,
+      "confidence": 0.98,
+      "needs_review": false
+    },
+    {
+      "raw_text": "CANNED BLACK BEANS X3     3.87",
+      "name": "Canned black beans",
+      "canonical_key": "canned_black_beans",
+      "qty": 3,
+      "unit": "each",
+      "unit_price": 1.29,
+      "line_total": 3.87,
+      "category": "pantry_staple",
+      "is_perishable": false,
+      "storage": {
+        "method": "pantry",
+        "temp_c": 21,
+        "duration_days": 365
+      },
+      "eat_by_window": null,
+      "confidence": 0.98,
+      "needs_review": false
+    },
+    {
+      "raw_text": "ORANGE JUICE 52OZ         4.59",
+      "name": "Orange juice",
+      "canonical_key": "orange_juice",
+      "qty": 1,
+      "unit": "each",
+      "unit_price": 4.59,
+      "line_total": 4.59,
+      "category": "beverage",
+      "is_perishable": true,
+      "storage": {
+        "method": "fridge",
+        "temp_c": 4,
+        "duration_days": 7
+      },
+      "eat_by_window": {
+        "start_days": 5,
+        "end_days": 7
+      },
+      "confidence": 0.98,
+      "needs_review": false
+    },
+    {
+      "raw_text": "PAPER TOWELS 6PK          7.49",
+      "name": "Paper towels",
+      "canonical_key": "paper_towels",
+      "qty": 1,
+      "unit": "pack",
+      "unit_price": 7.49,
+      "line_total": 7.49,
+      "category": "non_food",
+      "is_perishable": false,
+      "storage": null,
+      "eat_by_window": null,
+      "confidence": 0.98,
+      "needs_review": false
+    }
+  ]
+}
