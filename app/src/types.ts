@@ -36,7 +36,7 @@ export interface ReceiptItem {
 export interface ScanProvenance {
   mode: 'demo' | 'live';
   ai_called: boolean;
-  provider: 'openai' | null;
+  provider: 'rapidocr' | 'openai' | null;
   model: string | null;
   fixture_id: string | null;
 }

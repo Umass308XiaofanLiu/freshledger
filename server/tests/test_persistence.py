@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import sqlite3
 from pathlib import Path
 from datetime import date, timedelta
@@ -20,10 +21,12 @@ from app.services.receipt_store import (
     StoreValidationError,
     confirm_receipt,
     consume_pantry_item,
+    find_product_alias,
     list_pantry_items,
     load_receipt_draft,
     persist_receipt_draft,
     spoil_pantry_item,
+    upsert_product_alias,
 )
 
 
@@ -114,6 +117,7 @@ def test_init_database_configures_schema_and_pragmas(tmp_path: Path) -> None:
         "meal_suggestions",
         "insights_cache",
         "shelf_life_reference",
+        "product_aliases",
     } <= tables
     assert journal_mode == "wal"
 
@@ -139,8 +143,73 @@ def test_persist_and_load_draft_uses_cents_and_real_ids(tmp_path: Path) -> None:
     assert loaded.computed_sum_cents == 1247
     assert loaded.reconciliation_status == "ok"
     assert loaded.raw_parse == parsed_receipt()
+    assert loaded.image_content_hash is None
     assert [item.unit_price_cents for item in loaded.items] == [350, 897]
     assert loaded.items[1].excluded is True
+
+
+def test_concurrent_same_image_persistence_returns_one_draft(tmp_path: Path) -> None:
+    path = tmp_path / "concurrent.db"
+    init_database(path)
+
+    def persist() -> object:
+        return persist_receipt_draft(
+            parsed_receipt(), image_hash="same-image", database_path=path
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, second = pool.map(lambda _index: persist(), range(2))
+
+    assert first.receipt_id == second.receipt_id
+    assert first.item_ids == second.item_ids
+    assert sorted((first.created, second.created)) == [False, True]
+
+
+def test_product_aliases_are_exact_merchant_scoped_confirmed_memory(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "freshledger.db"
+    first = upsert_product_alias(
+        "  BNLS-CHKN   BRST ",
+        canonical_key="chicken_breast",
+        display_name="Chicken breast",
+        category="meat",
+        is_perishable=True,
+        merchant_name="Fresh Basket Market",
+        database_path=path,
+    )
+    second = upsert_product_alias(
+        "bnls chkn brst",
+        canonical_key="chicken_breast",
+        display_name="Chicken breast",
+        category="meat",
+        is_perishable=True,
+        merchant_name="FRESH BASKET MARKET",
+        database_path=path,
+    )
+
+    assert first.confirmed_count == 1
+    assert second.confirmed_count == 2
+    assert find_product_alias(
+        "BNLS CHKN BRST",
+        merchant_name="Fresh Basket Market",
+        database_path=path,
+    ) == second
+    assert (
+        find_product_alias(
+            "BNLS CHKN BRST", merchant_name="Other Store", database_path=path
+        )
+        is None
+    )
+    with pytest.raises(StoreValidationError, match="merchant"):
+        upsert_product_alias(
+            "BNLS CHKN BRST",
+            canonical_key="raw_chicken_breast",
+            display_name="Chicken breast",
+            category="meat",
+            is_perishable=True,
+            database_path=path,
+        )
 
 
 def test_persist_rejects_future_purchase_date(tmp_path: Path) -> None:
@@ -182,6 +251,32 @@ def test_confirm_is_atomic_and_creates_only_food_pantry_rows(tmp_path: Path) -> 
         confirm_receipt(
             draft.receipt_id, resolved_items(draft.item_ids), database_path=path
         )
+
+
+def test_concurrent_confirm_creates_exactly_one_pantry_row(tmp_path: Path) -> None:
+    path = tmp_path / "concurrent-confirm.db"
+    draft = persist_receipt_draft(
+        parsed_receipt(), image_hash="concurrent-confirm", database_path=path
+    )
+
+    def attempt_confirm() -> str:
+        try:
+            confirm_receipt(
+                draft.receipt_id,
+                resolved_items(draft.item_ids),
+                database_path=path,
+            )
+        except StoreConflictError:
+            return "conflict"
+        return "confirmed"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(lambda _index: attempt_confirm(), range(2)))
+
+    assert sorted(outcomes) == ["confirmed", "conflict"]
+    pantry = list_pantry_items(database_path=path)
+    assert len(pantry) == 1
+    assert pantry[0].receipt_item_id == draft.item_ids[0]
 
 
 def test_confirm_rejects_items_from_outside_the_receipt(tmp_path: Path) -> None:

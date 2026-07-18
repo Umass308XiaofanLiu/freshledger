@@ -4,6 +4,7 @@ import os
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from dotenv import load_dotenv
 
@@ -20,6 +21,7 @@ class Settings:
     admin_token: str
     cors_origins: tuple[str, ...]
     database_path: Path
+    receipt_scan_engine: Literal["offline", "openai"]
     openai_daily_call_limit: int
     auto_seed_demo_data: bool
 
@@ -46,6 +48,11 @@ def get_settings() -> Settings:
         )
     except ValueError:
         daily_call_limit = 3
+    receipt_scan_engine = os.getenv("RECEIPT_SCAN_ENGINE", "offline").strip().lower()
+    if receipt_scan_engine not in {"offline", "openai"}:
+        raise ValueError(
+            "RECEIPT_SCAN_ENGINE must be either 'offline' or 'openai'"
+        )
     auto_seed_demo_data = os.getenv("AUTO_SEED_DEMO_DATA", "true").strip().lower() in {
         "1",
         "true",
@@ -59,6 +66,7 @@ def get_settings() -> Settings:
         admin_token=os.getenv("ADMIN_TOKEN", "").strip(),
         cors_origins=cors_origins,
         database_path=database_path,
+        receipt_scan_engine=receipt_scan_engine,  # type: ignore[arg-type]
         openai_daily_call_limit=daily_call_limit,
         auto_seed_demo_data=auto_seed_demo_data,
     )

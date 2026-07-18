@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import unicodedata
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
@@ -59,6 +60,7 @@ class ReceiptDraftRecord:
     store_name: str | None
     purchased_at: str
     image_hash: str | None
+    image_content_hash: str | None
     subtotal_cents: int | None
     tax_cents: int | None
     total_cents: int | None
@@ -74,6 +76,7 @@ class ReceiptDraftRecord:
 class ConfirmResult:
     receipt_id: int
     pantry_item_ids: tuple[int, ...]
+    ledger_total_cents: int
 
 
 @dataclass(frozen=True)
@@ -108,6 +111,20 @@ class PantryMutationResult:
     occurred_at: str | None = None
 
 
+@dataclass(frozen=True)
+class ProductAliasRecord:
+    id: int
+    normalized_raw_line: str
+    merchant_key: str
+    raw_line: str
+    merchant_name: str | None
+    canonical_key: str
+    display_name: str
+    category: str
+    is_perishable: bool
+    confirmed_count: int
+
+
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
@@ -116,6 +133,121 @@ def _to_cents(value: float | None) -> int | None:
     if value is None:
         return None
     return int((Decimal(str(value)) * 100).quantize(Decimal("1"), ROUND_HALF_UP))
+
+
+def normalize_product_alias_key(value: str) -> str:
+    """Normalize an OCR description for conservative exact alias matching."""
+
+    normalized = unicodedata.normalize("NFKC", value).casefold()
+    return " ".join(
+        "".join(character if character.isalnum() else " " for character in normalized).split()
+    )
+
+
+def _row_to_product_alias(row: sqlite3.Row) -> ProductAliasRecord:
+    return ProductAliasRecord(
+        id=row["id"],
+        normalized_raw_line=row["normalized_raw_line"],
+        merchant_key=row["merchant_key"],
+        raw_line=row["raw_line"],
+        merchant_name=row["merchant_name"],
+        canonical_key=row["canonical_key"],
+        display_name=row["display_name"],
+        category=row["category"],
+        is_perishable=bool(row["is_perishable"]),
+        confirmed_count=row["confirmed_count"],
+    )
+
+
+def upsert_product_alias(
+    raw_text: str,
+    *,
+    canonical_key: str,
+    display_name: str,
+    category: str,
+    is_perishable: bool,
+    merchant_name: str | None = None,
+    database_path: str | Path | None = None,
+) -> ProductAliasRecord:
+    """Remember one explicit user correction for an exact parsed description.
+
+    Callers are responsible for invoking this only after a human confirmation;
+    recognizer guesses must never train this table.
+    """
+
+    normalized_raw_line = normalize_product_alias_key(raw_text)
+    merchant_key = normalize_product_alias_key(merchant_name or "")
+    if not normalized_raw_line:
+        raise StoreValidationError("product alias raw_text cannot be empty")
+    if not merchant_key:
+        raise StoreValidationError("product aliases require a merchant name")
+    if not canonical_key.strip() or not display_name.strip() or not category.strip():
+        raise StoreValidationError("product alias target fields cannot be empty")
+
+    init_database(database_path)
+    with connect(database_path) as connection, connection:
+        connection.execute(
+            """
+            INSERT INTO product_aliases (
+              normalized_raw_line, merchant_key, raw_line, merchant_name,
+              canonical_key, display_name, category, is_perishable
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(normalized_raw_line, merchant_key) DO UPDATE SET
+              raw_line=excluded.raw_line,
+              merchant_name=excluded.merchant_name,
+              canonical_key=excluded.canonical_key,
+              display_name=excluded.display_name,
+              category=excluded.category,
+              is_perishable=excluded.is_perishable,
+              confirmed_count=product_aliases.confirmed_count + 1,
+              updated_at=datetime('now')
+            """,
+            (
+                normalized_raw_line,
+                merchant_key,
+                raw_text.strip(),
+                merchant_name.strip() if merchant_name else None,
+                canonical_key.strip(),
+                display_name.strip(),
+                category.strip(),
+                int(is_perishable),
+            ),
+        )
+        row = connection.execute(
+            """
+            SELECT * FROM product_aliases
+            WHERE normalized_raw_line = ? AND merchant_key = ?
+            """,
+            (normalized_raw_line, merchant_key),
+        ).fetchone()
+    if row is None:  # pragma: no cover - guarded by the successful upsert
+        raise StoreConflictError("product alias was not persisted")
+    return _row_to_product_alias(row)
+
+
+def find_product_alias(
+    raw_text: str,
+    *,
+    merchant_name: str | None = None,
+    database_path: str | Path | None = None,
+) -> ProductAliasRecord | None:
+    """Find a merchant-specific exact alias."""
+
+    normalized_raw_line = normalize_product_alias_key(raw_text)
+    merchant_key = normalize_product_alias_key(merchant_name or "")
+    if not normalized_raw_line or not merchant_key:
+        return None
+    init_database(database_path)
+    with connect(database_path) as connection:
+        row = connection.execute(
+            """
+            SELECT * FROM product_aliases
+            WHERE normalized_raw_line = ? AND merchant_key = ?
+            LIMIT 1
+            """,
+            (normalized_raw_line, merchant_key),
+        ).fetchone()
+    return _row_to_product_alias(row) if row is not None else None
 
 
 def _reconciliation(
@@ -178,6 +310,7 @@ def persist_receipt_draft(
     parsed: ReceiptParse,
     *,
     image_hash: str | None,
+    image_content_hash: str | None = None,
     resolved_items: Sequence[ReceiptLineItem] | None = None,
     purchased_at_fallback: str | None = None,
     database_path: str | Path | None = None,
@@ -204,6 +337,10 @@ def persist_receipt_draft(
     computed_sum_cents, reconciliation_status = _reconciliation(parsed, items)
     init_database(database_path)
     with connect(database_path) as connection, connection:
+        # Serialize the idempotency check and insert. Without an immediate
+        # write lock, concurrent scans of the same image can both miss and one
+        # leaks a UNIQUE constraint failure instead of loading the winner.
+        connection.execute("BEGIN IMMEDIATE")
         if image_hash is not None:
             existing = connection.execute(
                 "SELECT id FROM receipts WHERE image_hash = ?", (image_hash,)
@@ -222,15 +359,17 @@ def persist_receipt_draft(
         cursor = connection.execute(
             """
             INSERT INTO receipts (
-              store_name, purchased_at, image_hash, subtotal_cents, tax_cents,
+              store_name, purchased_at, image_hash, image_content_hash,
+              subtotal_cents, tax_cents,
               total_cents, computed_sum_cents, reconciliation_status,
               overall_confidence, status, raw_model_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?)
             """,
             (
                 parsed.store_name,
                 purchased_at,
                 image_hash,
+                image_content_hash,
                 _to_cents(parsed.subtotal),
                 _to_cents(parsed.tax),
                 _to_cents(parsed.total),
@@ -298,6 +437,7 @@ def load_receipt_draft(
         store_name=receipt["store_name"],
         purchased_at=receipt["purchased_at"],
         image_hash=receipt["image_hash"],
+        image_content_hash=receipt["image_content_hash"],
         subtotal_cents=receipt["subtotal_cents"],
         tax_cents=receipt["tax_cents"],
         total_cents=receipt["total_cents"],
@@ -359,6 +499,10 @@ def confirm_receipt(
 
     init_database(database_path)
     with connect(database_path) as connection, connection:
+        # Acquire the writer reservation before reading status. A second
+        # concurrent confirmer waits, then observes `confirmed` and conflicts
+        # instead of creating a duplicate pantry row from the same draft.
+        connection.execute("BEGIN IMMEDIATE")
         receipt = connection.execute(
             "SELECT * FROM receipts WHERE id = ?", (receipt_id,)
         ).fetchone()
@@ -387,7 +531,10 @@ def confirm_receipt(
             raise StoreValidationError("purchased_at cannot be in the future")
 
         pantry_item_ids: list[int] = []
+        computed_sum_cents = 0
         for item in resolved_items:
+            line_total_cents = _to_cents(item.line_total) or 0
+            computed_sum_cents += line_total_cents
             connection.execute(
                 """
                 UPDATE receipt_items SET
@@ -403,7 +550,7 @@ def confirm_receipt(
                     item.qty,
                     item.unit,
                     _to_cents(item.unit_price) or 0,
-                    _to_cents(item.line_total) or 0,
+                    line_total_cents,
                     item.category,
                     int(item.is_perishable),
                     item.confidence,
@@ -463,12 +610,44 @@ def confirm_receipt(
             )
             pantry_item_ids.append(int(pantry_cursor.lastrowid))
 
+        if receipt["subtotal_cents"] is not None:
+            reconciliation_delta = computed_sum_cents - receipt["subtotal_cents"]
+            reconciliation_status = (
+                "ok" if abs(reconciliation_delta) <= 5 else "mismatch"
+            )
+        elif receipt["total_cents"] is not None:
+            reconciliation_delta = (
+                computed_sum_cents
+                + (receipt["tax_cents"] or 0)
+                - receipt["total_cents"]
+            )
+            reconciliation_status = (
+                "ok" if abs(reconciliation_delta) <= 5 else "mismatch"
+            )
+        else:
+            reconciliation_status = "unreadable"
+        ledger_total_cents = (
+            receipt["total_cents"]
+            if receipt["total_cents"] is not None
+            else computed_sum_cents
+        )
         connection.execute(
-            "UPDATE receipts SET store_name = ?, purchased_at = ?, status = 'confirmed' WHERE id = ?",
-            (store_name if store_name is not None else receipt["store_name"], final_purchase_date, receipt_id),
+            """
+            UPDATE receipts SET
+              store_name = ?, purchased_at = ?, computed_sum_cents = ?,
+              reconciliation_status = ?, status = 'confirmed'
+            WHERE id = ?
+            """,
+            (
+                store_name if store_name is not None else receipt["store_name"],
+                final_purchase_date,
+                computed_sum_cents,
+                reconciliation_status,
+                receipt_id,
+            ),
         )
 
-    return ConfirmResult(receipt_id, tuple(pantry_item_ids))
+    return ConfirmResult(receipt_id, tuple(pantry_item_ids), ledger_total_cents)
 
 
 def list_pantry_items(

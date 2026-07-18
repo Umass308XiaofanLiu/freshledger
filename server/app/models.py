@@ -97,7 +97,7 @@ class Reconciliation(StrictModel):
 class ScanProvenance(StrictModel):
     mode: Literal["demo", "live"]
     ai_called: bool
-    provider: Literal["openai"] | None
+    provider: Literal["openai", "rapidocr"] | None
     model: str | None
     fixture_id: str | None
 
@@ -116,7 +116,7 @@ class ReceiptDraft(StrictModel):
 class ConfirmReceiptItem(StrictModel):
     item_id: int
     name: str | None = None
-    qty: float | None = None
+    qty: float | None = Field(default=None, gt=0, le=100)
     unit: Literal[
         "each",
         "lb",
@@ -129,7 +129,7 @@ class ConfirmReceiptItem(StrictModel):
         "bunch",
         "dozen",
     ] | None = None
-    unit_price: float | None = None
+    unit_price: float | None = Field(default=None, ge=-500, le=500)
     category: Literal[
         "produce",
         "dairy",

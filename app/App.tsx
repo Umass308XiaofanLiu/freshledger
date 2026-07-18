@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Image,
   type ImageSourcePropType,
@@ -18,6 +18,7 @@ import {
   Chip,
   Dialog,
   Divider,
+  Menu,
   PaperProvider,
   Portal,
   ProgressBar,
@@ -25,6 +26,7 @@ import {
   Snackbar,
   Surface,
   Text,
+  TextInput,
 } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -41,6 +43,7 @@ import {
   seedDemo,
   spoilPantryItem,
 } from './src/api';
+import { applyIdentitySafety } from './src/reviewState';
 import { palette, theme } from './src/theme';
 import type {
   InsightsResponse,
@@ -53,8 +56,9 @@ import type {
   StorageMethod,
 } from './src/types';
 
-type Mode = 'demo' | 'live';
+type Mode = 'demo' | 'local' | 'gpt';
 type ScanState = 'idle' | 'preparing' | 'reading' | 'done' | 'confirming' | 'confirmed' | 'error';
+type ProvenanceKind = 'demo' | 'local' | 'openai' | 'unknown';
 
 interface PreparedImage {
   uri: string;
@@ -115,14 +119,41 @@ const advicePresentation = {
   well_bought: { label: 'WELL BOUGHT', color: palette.fresh, background: '#DCFCE7' },
 };
 
+const RECEIPT_CATEGORIES = [
+  'produce',
+  'dairy',
+  'meat',
+  'seafood',
+  'bakery',
+  'frozen',
+  'deli',
+  'beverage',
+  'pantry_staple',
+  'non_food',
+  'unknown',
+] as const;
+
+const RECEIPT_UNITS = [
+  'each',
+  'lb',
+  'oz',
+  'kg',
+  'g',
+  'gallon',
+  'liter',
+  'pack',
+  'bunch',
+  'dozen',
+] as const;
+
 async function prepareImage(asset: ImagePicker.ImagePickerAsset): Promise<PreparedImage> {
   const manipulator = ImageManipulator.ImageManipulator.manipulate(asset.uri);
   const longEdge = Math.max(asset.width, asset.height);
   if (longEdge > 1600) {
     if (asset.width >= asset.height) {
-      manipulator.resize({ width: 1600, height: null });
+      manipulator.resize({ width: 1600 });
     } else {
-      manipulator.resize({ width: null, height: 1600 });
+      manipulator.resize({ height: 1600 });
     }
   }
   const rendered = await manipulator.renderAsync();
@@ -138,6 +169,20 @@ function errorCopy(error: unknown): string {
     : 'FreshLedger hit a snag — please try again.';
 }
 
+function provenanceKind(receipt: ReceiptDraft): ProvenanceKind {
+  if (receipt.scan_provenance.mode === 'demo') return 'demo';
+  if (
+    receipt.scan_provenance.provider === 'rapidocr' &&
+    !receipt.scan_provenance.ai_called
+  ) {
+    return 'local';
+  }
+  if (receipt.scan_provenance.provider === 'openai' && receipt.scan_provenance.ai_called) {
+    return 'openai';
+  }
+  return 'unknown';
+}
+
 function optionDays(item: ReceiptItem, method: StorageMethod): number | null {
   return item.storage_options?.[`${method}_days`] ?? null;
 }
@@ -151,13 +196,44 @@ function storageTemperature(method: StorageMethod, current?: number): string {
 
 function ReceiptItemCard({
   item,
+  onNameChange,
+  onItemChange,
   onStorageChange,
 }: {
   item: ReceiptItem;
+  onNameChange: (name: string) => void;
+  onItemChange: (
+    updates: Partial<
+      Pick<ReceiptItem, 'qty' | 'unit' | 'unit_price' | 'category' | 'excluded'>
+    >,
+  ) => void;
   onStorageChange: (method: StorageMethod) => void;
 }) {
+  const [qtyText, setQtyText] = useState(String(item.qty));
+  const [unitPriceText, setUnitPriceText] = useState(item.unit_price.toFixed(2));
+  const [categoryMenuVisible, setCategoryMenuVisible] = useState(false);
+  const [unitMenuVisible, setUnitMenuVisible] = useState(false);
+
+  useEffect(() => {
+    setQtyText(String(item.qty));
+    setUnitPriceText(item.unit_price.toFixed(2));
+  }, [item.item_id]);
+
+  const updateNumber = (field: 'qty' | 'unit_price', value: string) => {
+    if (field === 'qty') setQtyText(value);
+    else setUnitPriceText(value);
+    const parsed = Number(value);
+    const valid =
+      Number.isFinite(parsed) &&
+      (field === 'qty' ? parsed > 0 && parsed <= 100 : parsed >= -500 && parsed <= 500);
+    if (valid) onItemChange({ [field]: parsed });
+  };
+
   return (
-    <Card mode="elevated" style={styles.itemCard}>
+    <Card
+      mode="elevated"
+      style={[styles.itemCard, item.needs_review && styles.itemNeedsReview]}
+    >
       <Card.Content>
         <View style={styles.itemHeader}>
           <View style={styles.itemName}>
@@ -172,8 +248,103 @@ function ReceiptItemCard({
           </Text>
         </View>
 
+        <View style={styles.reviewEditor}>
+          <TextInput
+            mode="outlined"
+            dense
+            label={item.needs_review ? 'Correct item name' : 'Item name'}
+            value={item.name}
+            onChangeText={onNameChange}
+          />
+          {item.needs_review && (
+            <Text variant="bodySmall" style={styles.mutedText}>
+              A confirmed correction can teach this store’s exact receipt alias. FreshLedger never learns from an unconfirmed guess.
+            </Text>
+          )}
+          <View style={styles.editRow}>
+            <TextInput
+              mode="outlined"
+              dense
+              label="Quantity"
+              value={qtyText}
+              keyboardType="decimal-pad"
+              onChangeText={(value) => updateNumber('qty', value)}
+              style={styles.editField}
+            />
+            <TextInput
+              mode="outlined"
+              dense
+              label="Unit price"
+              value={unitPriceText}
+              keyboardType="decimal-pad"
+              left={<TextInput.Affix text="$" />}
+              onChangeText={(value) => updateNumber('unit_price', value)}
+              style={styles.editField}
+            />
+            <Button
+              compact
+              mode={item.excluded ? 'contained-tonal' : 'outlined'}
+              icon={item.excluded ? 'fridge-outline' : 'book-outline'}
+              onPress={() => onItemChange({ excluded: !item.excluded })}
+              style={styles.excludeButton}
+              disabled={item.category === 'non_food'}
+            >
+              {item.excluded ? 'Add to pantry' : 'Ledger only'}
+            </Button>
+          </View>
+          <View style={styles.editRow}>
+            <Menu
+              visible={categoryMenuVisible}
+              onDismiss={() => setCategoryMenuVisible(false)}
+              anchor={
+                <Button mode="outlined" onPress={() => setCategoryMenuVisible(true)}>
+                  Category · {item.category.replace('_', ' ')}
+                </Button>
+              }
+            >
+              {RECEIPT_CATEGORIES.map((category) => (
+                <Menu.Item
+                  key={category}
+                  title={category.replace('_', ' ')}
+                  onPress={() => {
+                    onItemChange(
+                      category === 'non_food'
+                        ? { category, excluded: true }
+                        : { category },
+                    );
+                    setCategoryMenuVisible(false);
+                  }}
+                />
+              ))}
+            </Menu>
+            <Menu
+              visible={unitMenuVisible}
+              onDismiss={() => setUnitMenuVisible(false)}
+              anchor={
+                <Button mode="outlined" onPress={() => setUnitMenuVisible(true)}>
+                  Unit · {item.unit}
+                </Button>
+              }
+            >
+              {RECEIPT_UNITS.map((unit) => (
+                <Menu.Item
+                  key={unit}
+                  title={unit}
+                  onPress={() => {
+                    onItemChange({ unit });
+                    setUnitMenuVisible(false);
+                  }}
+                />
+              ))}
+            </Menu>
+          </View>
+          <Text variant="bodySmall" style={styles.mutedText}>
+            Line total updates from quantity × unit price. “Ledger only” keeps spending history but never adds the line to pantry. Identity or category corrections are re-grounded before storage advice is saved.
+          </Text>
+        </View>
+
         {(item.storage || item.excluded) && <Divider style={styles.divider} />}
-        {item.storage && (
+        {item.storage && !item.excluded && (
           <View>
             <Text variant="labelMedium" style={styles.fieldLabel}>
               Store it
@@ -209,7 +380,7 @@ function ReceiptItemCard({
           {item.excluded && <Chip compact>Ledger only</Chip>}
           {item.needs_review && (
             <Chip compact icon="alert" style={styles.reviewChip}>
-              Check me
+              Check against photo
             </Chip>
           )}
           {item.shelf_life_source === 'reference' && (
@@ -379,6 +550,8 @@ export default function App() {
       ).size,
     [meals],
   );
+  const reviewItemCount = receipt?.items.filter((item) => item.needs_review).length ?? 0;
+  const receiptProvenance = receipt ? provenanceKind(receipt) : null;
 
   const resetResult = () => {
     setReceipt(null);
@@ -406,18 +579,25 @@ export default function App() {
   };
 
   const processAsset = async (asset: ImagePicker.ImagePickerAsset) => {
-    setMode('live');
+    setMode('local');
     resetResult();
     setPreviewSource({ uri: asset.uri });
     setScanState('preparing');
     try {
-      const prepared = await prepareImage(asset);
+      // Expo 57 allows Web picker assets to report zero dimensions while
+      // exposing the original File for direct FormData upload. The server
+      // validates and resizes every upload, so Web skips the canvas path.
+      const prepared =
+        Platform.OS === 'web'
+          ? { uri: asset.uri, width: asset.width, height: asset.height }
+          : await prepareImage(asset);
       setPreviewSource({ uri: prepared.uri });
       setScanState('reading');
       const draft = await scanReceipt({
         uri: prepared.uri,
-        mimeType: 'image/jpeg',
-        fileName: 'receipt.jpg',
+        mimeType: Platform.OS === 'web' ? (asset.mimeType ?? 'image/jpeg') : 'image/jpeg',
+        fileName: Platform.OS === 'web' ? (asset.fileName ?? 'receipt.jpg') : 'receipt.jpg',
+        webFile: Platform.OS === 'web' ? (asset.file ?? undefined) : undefined,
       });
       setReceipt(draft);
       setScanState('done');
@@ -474,6 +654,42 @@ export default function App() {
                 }
               : { start_days: 0, end_days: duration },
           };
+        }),
+      };
+    });
+  };
+
+  const updateItemName = (itemId: number, name: string) => {
+    setReceipt((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        items: current.items.map((item) =>
+          item.item_id === itemId ? applyIdentitySafety(item, { name }) : item,
+        ),
+      };
+    });
+  };
+
+  const updateItemDetails = (
+    itemId: number,
+    updates: Partial<
+      Pick<ReceiptItem, 'qty' | 'unit' | 'unit_price' | 'category' | 'excluded'>
+    >,
+  ) => {
+    setReceipt((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        items: current.items.map((item) => {
+          if (item.item_id !== itemId) return item;
+          const qty = updates.qty ?? item.qty;
+          const unitPrice = updates.unit_price ?? item.unit_price;
+          const updated = {
+            ...item,
+            line_total: Math.round(qty * unitPrice * 100) / 100,
+          };
+          return applyIdentitySafety(updated, updates);
         }),
       };
     });
@@ -650,8 +866,9 @@ export default function App() {
                 setScanState('idle');
               }}
               buttons={[
-                { value: 'demo', label: 'Demo · free', icon: 'play-circle-outline' },
-                { value: 'live', label: 'Live · GPT-5.6', icon: 'robot-outline' },
+                { value: 'demo', label: 'Demo', icon: 'play-circle-outline' },
+                { value: 'local', label: 'Local OCR', icon: 'text-box-search-outline' },
+                { value: 'gpt', label: 'GPT · future', icon: 'robot-outline' },
               ]}
             />
 
@@ -717,12 +934,22 @@ export default function App() {
                   </Text>
                 </Card.Content>
               </Card>
-            ) : (
+            ) : mode === 'local' ? (
               <Card mode="contained" style={styles.modeCard}>
                 <Card.Content>
-                  <Text variant="headlineSmall">Scan with GPT-5.6 vision</Text>
+                  <View style={styles.modeHeading}>
+                    <View style={styles.itemName}>
+                      <Text variant="headlineSmall">Local Scan Beta</Text>
+                      <Text variant="bodyMedium" style={styles.mutedText}>
+                        RapidOCR reads the photo on your FreshLedger server, then deterministic rules reconstruct and reconcile the receipt.
+                      </Text>
+                    </View>
+                    <Chip compact icon="cloud-off-outline" style={styles.zeroTokenChip}>
+                      0 cloud calls
+                    </Chip>
+                  </View>
                   <Text variant="bodyMedium" style={styles.mutedText}>
-                    Your photo is compressed locally, sent to FreshLedger's FastAPI server, and parsed in one strict Structured Outputs call.
+                    Built-in product aliases improve matching. Confirmed name corrections improve exact merchant matching over time; uncertain lines are never silently guessed.
                   </Text>
                   <View style={styles.actions}>
                     {Platform.OS !== 'web' && (
@@ -735,7 +962,27 @@ export default function App() {
                     </Button>
                   </View>
                   <Text variant="bodySmall" style={styles.disclosure}>
-                    Live mode requires OPENAI_API_KEY on the server and may use API credits.
+                    Local OCR · no API key · no OpenAI call. The submitted server defaults to this engine; the result below always discloses what actually ran.
+                  </Text>
+                </Card.Content>
+              </Card>
+            ) : (
+              <Card mode="outlined" style={[styles.modeCard, styles.futureCard]}>
+                <Card.Content>
+                  <View style={styles.modeHeading}>
+                    <View style={styles.itemName}>
+                      <Text variant="headlineSmall">Optional GPT-5.6 vision</Text>
+                      <Text variant="bodyMedium" style={styles.mutedText}>
+                        Future deployments can opt into the retained OpenAI adapter with their own API key.
+                      </Text>
+                    </View>
+                    <Chip compact icon="clock-outline">Future option</Chip>
+                  </View>
+                  <Button mode="outlined" icon="lock-outline" disabled style={styles.futureButton}>
+                    Not enabled in this build
+                  </Button>
+                  <Text variant="bodySmall" style={styles.disclosure}>
+                    This screen cannot trigger an API call. Choose Local OCR for a real photo or Demo for a repeatable saved receipt.
                   </Text>
                 </Card.Content>
               </Card>
@@ -757,12 +1004,12 @@ export default function App() {
                           ? 'Stocking your fridge…'
                           : mode === 'demo'
                             ? 'Loading saved sample…'
-                            : 'GPT-5.6 is reading your receipt…'}
+                            : 'Local OCR is reading your receipt…'}
                     </Text>
                     <Text variant="bodySmall" style={styles.mutedText}>
                       {mode === 'demo'
                         ? 'No AI call: the saved parse is going through the same safety and persistence pipeline.'
-                        : 'One vision call itemizes every visible line before server-side grounding.'}
+                        : 'OCR, receipt rules, and product memory are reconstructing visible lines with zero cloud-AI calls.'}
                     </Text>
                   </View>
                 </Card.Content>
@@ -774,7 +1021,7 @@ export default function App() {
                 <Card.Content>
                   <Text variant="titleMedium">FreshLedger needs another try</Text>
                   <Text variant="bodyMedium">{errorMessage}</Text>
-                  {mode === 'live' && (
+                  {mode === 'local' && (
                     <Button mode="text" icon="play-circle-outline" onPress={() => startDemo(SAMPLES[0])}>
                       Try Demo Mode instead
                     </Button>
@@ -796,28 +1043,42 @@ export default function App() {
                 <Card
                   mode="contained"
                   style={
-                    receipt.scan_provenance.mode === 'demo'
+                    receiptProvenance === 'demo'
                       ? styles.demoDisclosureCard
-                      : styles.liveDisclosureCard
+                      : receiptProvenance === 'local'
+                        ? styles.localDisclosureCard
+                        : styles.liveDisclosureCard
                   }
                 >
                   <Card.Content style={styles.provenanceRow}>
                     <Chip
                       compact
                       icon={
-                        receipt.scan_provenance.mode === 'demo'
+                        receiptProvenance === 'demo'
                           ? 'database-outline'
-                          : 'robot-outline'
+                          : receiptProvenance === 'local'
+                            ? 'text-box-search-outline'
+                            : receiptProvenance === 'openai'
+                              ? 'robot-outline'
+                              : 'help-circle-outline'
                       }
                     >
-                      {receipt.scan_provenance.mode === 'demo'
+                      {receiptProvenance === 'demo'
                         ? 'Sample data · no AI call'
-                        : `Live · ${receipt.scan_provenance.model ?? 'GPT-5.6'}`}
+                        : receiptProvenance === 'local'
+                          ? 'Local OCR · 0 cloud calls'
+                          : receiptProvenance === 'openai'
+                            ? `Optional live · ${receipt.scan_provenance.model ?? 'GPT-5.6'}`
+                            : 'Scan source unavailable'}
                     </Chip>
                     <Text variant="bodySmall" style={styles.provenanceCopy}>
-                      {receipt.scan_provenance.mode === 'demo'
+                      {receiptProvenance === 'demo'
                         ? `Fixture ${receipt.scan_provenance.fixture_id?.toUpperCase()}`
-                        : 'OpenAI Structured Outputs'}
+                        : receiptProvenance === 'local'
+                          ? `${receipt.scan_provenance.model ?? 'RapidOCR'} · on-server OCR · no API key`
+                          : receiptProvenance === 'openai'
+                            ? 'OpenAI Structured Outputs · API call disclosed'
+                            : 'Review this receipt before confirming'}
                     </Text>
                   </Card.Content>
                 </Card>
@@ -829,6 +1090,21 @@ export default function App() {
                     {receipt.items.length} items
                   </Text>
                 </View>
+
+                {reviewItemCount > 0 && (
+                  <Card mode="outlined" style={styles.warningCard}>
+                    <Card.Content>
+                      <Text variant="titleMedium">
+                        {reviewItemCount} uncertain {reviewItemCount === 1 ? 'line needs' : 'lines need'} a quick check
+                      </Text>
+                      <Text variant="bodyMedium" style={styles.mutedText}>
+                        {receiptProvenance === 'local'
+                          ? 'Local OCR did not confidently resolve every field. Compare each highlighted line with the photo; correct its details and choose which food lines enter pantry.'
+                          : 'Compare each highlighted line with the receipt photo before you confirm it.'}
+                      </Text>
+                    </Card.Content>
+                  </Card>
+                )}
 
                 {receipt.reconciliation.status === 'mismatch' && (
                   <Card mode="outlined" style={styles.warningCard}>
@@ -842,6 +1118,8 @@ export default function App() {
                   <ReceiptItemCard
                     key={item.item_id}
                     item={item}
+                    onNameChange={(name) => updateItemName(item.item_id, name)}
+                    onItemChange={(updates) => updateItemDetails(item.item_id, updates)}
                     onStorageChange={(method) => updateStorage(item.item_id, method)}
                   />
                 ))}
@@ -854,7 +1132,9 @@ export default function App() {
                     disabled={isWorking}
                     contentStyle={styles.primaryButton}
                   >
-                    Confirm & add to my fridge
+                    {reviewItemCount > 0
+                      ? 'Confirm after review & add to my fridge'
+                      : 'Confirm & add to my fridge'}
                   </Button>
                 )}
               </View>
@@ -1137,6 +1417,8 @@ const styles = StyleSheet.create({
   sampleThumb: { width: '100%', height: 128, borderRadius: 8, marginBottom: 10 },
   primaryButton: { minHeight: 48 },
   secondaryDemoButton: { marginTop: 10 },
+  futureCard: { borderColor: '#CBD5E1' },
+  futureButton: { marginTop: 18 },
   disclosure: { color: palette.muted, textAlign: 'center', marginTop: 10 },
   preview: { width: '100%', height: 300, borderRadius: 12, backgroundColor: '#E2E8F0' },
   loadingRow: { flexDirection: 'row', alignItems: 'center' },
@@ -1145,10 +1427,16 @@ const styles = StyleSheet.create({
   warningCard: { borderColor: palette.warning },
   results: { gap: 12 },
   demoDisclosureCard: { backgroundColor: '#FEF3C7' },
+  localDisclosureCard: { backgroundColor: '#DCFCE7' },
   liveDisclosureCard: { backgroundColor: '#CFFAFE' },
   provenanceRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 },
   provenanceCopy: { color: palette.muted },
   itemCard: { backgroundColor: palette.surface },
+  itemNeedsReview: { borderWidth: 2, borderColor: palette.warning },
+  reviewEditor: { marginTop: 12 },
+  editRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  editField: { flexGrow: 1, flexBasis: 150 },
+  excludeButton: { alignSelf: 'center' },
   itemHeader: { flexDirection: 'row', alignItems: 'flex-start' },
   itemName: { flex: 1, paddingRight: 12 },
   price: { fontVariant: ['tabular-nums'], fontWeight: '700' },

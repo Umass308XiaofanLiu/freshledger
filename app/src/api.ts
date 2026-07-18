@@ -29,6 +29,7 @@ interface UploadableImage {
   uri: string;
   mimeType: string;
   fileName: string;
+  webFile?: Blob;
 }
 
 interface ErrorEnvelope {
@@ -106,9 +107,13 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 export async function scanReceipt(image: UploadableImage): Promise<ReceiptDraft> {
   const form = new FormData();
   if (Platform.OS === 'web') {
-    const imageResponse = await fetch(image.uri);
-    const blob = await imageResponse.blob();
-    form.append('image', blob, image.fileName);
+    if (image.webFile) {
+      form.append('image', image.webFile, image.fileName);
+    } else {
+      const imageResponse = await fetch(image.uri);
+      const blob = await imageResponse.blob();
+      form.append('image', blob, image.fileName);
+    }
   } else {
     form.append(
       'image',
@@ -119,7 +124,10 @@ export async function scanReceipt(image: UploadableImage): Promise<ReceiptDraft>
       } as unknown as Blob,
     );
   }
-  return request<ReceiptDraft>('/v1/receipts/scan', { method: 'POST', body: form });
+  return request<ReceiptDraft>('/v1/receipts/scan?engine=offline', {
+    method: 'POST',
+    body: form,
+  });
 }
 
 export function scanDemoReceipt(sampleId: string): Promise<ReceiptDraft> {

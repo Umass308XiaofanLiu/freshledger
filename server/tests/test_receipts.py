@@ -12,7 +12,14 @@ from app.main import app
 from app.models import EatByWindow, ReceiptLineItem, ReceiptParse, StoragePlan
 from app.routers import receipts
 from app.services.images import MAX_LONG_EDGE, MAX_SHORT_EDGE, prepare_receipt_image
-from app.services.receipt_store import load_receipt_draft
+from app.services.receipt_store import (
+    PersistDraftResult,
+    find_product_alias,
+    list_pantry_items,
+    load_receipt_draft,
+    persist_receipt_draft,
+    upsert_product_alias,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -114,14 +121,285 @@ def test_scan_returns_structured_draft(
     assert payload["status"] == "draft"
     assert payload["scan_provenance"] == {
         "mode": "live",
-        "ai_called": True,
-        "provider": "openai",
-        "model": "gpt-5.6",
+        "ai_called": False,
+        "provider": "rapidocr",
+        "model": "PP-OCRv6-small",
         "fixture_id": None,
     }
     assert payload["reconciliation"]["status"] == "ok"
     assert payload["items"][0]["name"] == "Organic Baby Spinach"
     assert payload["items"][0]["line_total"] == 3.49
+
+
+def test_openai_scan_engine_remains_optional(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("RECEIPT_SCAN_ENGINE", "openai")
+    get_settings.cache_clear()
+
+    async def fake_parse(_jpeg_bytes: bytes) -> ReceiptParse:
+        return parsed_receipt()
+
+    monkeypatch.setattr(receipts, "parse_receipt_image", fake_parse)
+    response = client.post(
+        "/v1/receipts/scan",
+        headers={"Authorization": "Bearer test-demo-token"},
+        files={"image": ("receipt.jpg", make_jpeg(), "image/jpeg")},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["scan_provenance"] == {
+        "mode": "live",
+        "ai_called": True,
+        "provider": "openai",
+        "model": "gpt-5.6",
+        "fixture_id": None,
+    }
+
+
+def test_explicit_local_scan_overrides_global_openai_engine(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("RECEIPT_SCAN_ENGINE", "openai")
+    get_settings.cache_clear()
+    observed_engine: str | None = None
+
+    async def fake_parse(
+        _jpeg_bytes: bytes, *, engine: str | None = None
+    ) -> ReceiptParse:
+        nonlocal observed_engine
+        observed_engine = engine
+        return parsed_receipt()
+
+    monkeypatch.setattr(receipts, "parse_receipt_image", fake_parse)
+    response = client.post(
+        "/v1/receipts/scan?engine=offline",
+        headers={"Authorization": "Bearer test-demo-token"},
+        files={"image": ("receipt.jpg", make_jpeg(width=603), "image/jpeg")},
+    )
+
+    assert response.status_code == 201
+    assert observed_engine == "offline"
+    assert response.json()["scan_provenance"] == {
+        "mode": "live",
+        "ai_called": False,
+        "provider": "rapidocr",
+        "model": "PP-OCRv6-small",
+        "fixture_id": None,
+    }
+
+
+def test_query_parameter_cannot_force_an_openai_call(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def forbidden_parse(*_args: object, **_kwargs: object) -> ReceiptParse:
+        raise AssertionError("an OpenAI engine query must be rejected before dispatch")
+
+    monkeypatch.setattr(receipts, "parse_receipt_image", forbidden_parse)
+    response = client.post(
+        "/v1/receipts/scan?engine=openai",
+        headers={"Authorization": "Bearer test-demo-token"},
+        files={"image": ("receipt.jpg", make_jpeg(width=610), "image/jpeg")},
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_scan_cache_is_namespaced_by_recognizer_and_preserves_content_hash(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def fake_parse(_jpeg_bytes: bytes) -> ReceiptParse:
+        return parsed_receipt()
+
+    monkeypatch.setattr(receipts, "parse_receipt_image", fake_parse)
+    headers = {"Authorization": "Bearer test-demo-token"}
+    jpeg = make_jpeg()
+    offline = client.post(
+        "/v1/receipts/scan",
+        headers=headers,
+        files={"image": ("receipt.jpg", jpeg, "image/jpeg")},
+    )
+    assert offline.status_code == 201
+
+    monkeypatch.setenv("RECEIPT_SCAN_ENGINE", "openai")
+    get_settings.cache_clear()
+    openai = client.post(
+        "/v1/receipts/scan",
+        headers=headers,
+        files={"image": ("receipt.jpg", jpeg, "image/jpeg")},
+    )
+    assert openai.status_code == 201
+    assert openai.json()["receipt_id"] != offline.json()["receipt_id"]
+
+    offline_record = load_receipt_draft(offline.json()["receipt_id"])
+    openai_record = load_receipt_draft(openai.json()["receipt_id"])
+    assert offline_record is not None and openai_record is not None
+    assert offline_record.image_hash is not None
+    assert offline_record.image_hash.startswith("rapidocr:PP-OCRv6-small:")
+    assert openai_record.image_hash is not None
+    assert openai_record.image_hash.startswith("openai:gpt-5.6:")
+    assert offline_record.image_content_hash == openai_record.image_content_hash
+
+
+def test_confirmed_receipt_image_is_not_reissued_as_a_draft(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def fake_parse(_jpeg_bytes: bytes) -> ReceiptParse:
+        return parsed_receipt()
+
+    monkeypatch.setattr(receipts, "parse_receipt_image", fake_parse)
+    headers = {"Authorization": "Bearer test-demo-token"}
+    jpeg = make_jpeg(width=604)
+    scan = client.post(
+        "/v1/receipts/scan",
+        headers=headers,
+        files={"image": ("receipt.jpg", jpeg, "image/jpeg")},
+    )
+    assert scan.status_code == 201
+    draft = scan.json()
+    confirm = client.post(
+        f"/v1/receipts/{draft['receipt_id']}/confirm",
+        headers=headers,
+        json={"items": [{"item_id": draft["items"][0]["item_id"]}]},
+    )
+    assert confirm.status_code == 200
+
+    repeated = client.post(
+        "/v1/receipts/scan",
+        headers=headers,
+        files={"image": ("receipt.jpg", jpeg, "image/jpeg")},
+    )
+    assert repeated.status_code == 409
+    assert repeated.json()["error"]["code"] == "RECEIPT_ALREADY_IMPORTED"
+
+
+@pytest.mark.parametrize("invalid_kind", ["duplicate", "extra"])
+def test_confirm_rejects_duplicate_or_extra_item_ids(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    invalid_kind: str,
+) -> None:
+    async def fake_parse(_jpeg_bytes: bytes) -> ReceiptParse:
+        return parsed_receipt()
+
+    monkeypatch.setattr(receipts, "parse_receipt_image", fake_parse)
+    headers = {"Authorization": "Bearer test-demo-token"}
+    scan = client.post(
+        "/v1/receipts/scan",
+        headers=headers,
+        files={"image": ("receipt.jpg", make_jpeg(width=614), "image/jpeg")},
+    ).json()
+    valid_item = {"item_id": scan["items"][0]["item_id"]}
+    invalid_item = (
+        valid_item.copy()
+        if invalid_kind == "duplicate"
+        else {"item_id": scan["items"][0]["item_id"] + 9999}
+    )
+
+    response = client.post(
+        f"/v1/receipts/{scan['receipt_id']}/confirm",
+        headers=headers,
+        json={"items": [valid_item, invalid_item]},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == (
+        "DUPLICATE_ITEM" if invalid_kind == "duplicate" else "UNKNOWN_ITEM"
+    )
+    stored = load_receipt_draft(scan["receipt_id"])
+    assert stored is not None
+    assert stored.status == "draft"
+    assert list_pantry_items() == ()
+
+
+def test_cached_draft_applies_new_exact_confirmed_alias(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parsed = parsed_receipt()
+    parsed.items[0].name = "Mystery greens"
+    parsed.items[0].canonical_key = None
+    parsed.items[0].category = "unknown"
+
+    async def fake_parse(_jpeg_bytes: bytes) -> ReceiptParse:
+        return parsed
+
+    monkeypatch.setattr(receipts, "parse_receipt_image", fake_parse)
+    headers = {"Authorization": "Bearer test-demo-token"}
+    jpeg = make_jpeg(width=605)
+    first = client.post(
+        "/v1/receipts/scan",
+        headers=headers,
+        files={"image": ("receipt.jpg", jpeg, "image/jpeg")},
+    )
+    assert first.status_code == 201
+    upsert_product_alias(
+        "ORG BABY SPIN 5OZ",
+        canonical_key="baby_spinach",
+        display_name="Spinach",
+        category="produce",
+        is_perishable=True,
+        merchant_name="Test Market",
+    )
+
+    cached = client.post(
+        "/v1/receipts/scan",
+        headers=headers,
+        files={"image": ("receipt.jpg", jpeg, "image/jpeg")},
+    )
+    assert cached.status_code == 201
+    assert cached.json()["receipt_id"] == first.json()["receipt_id"]
+    assert cached.json()["items"][0]["name"] == "Spinach"
+    assert cached.json()["items"][0]["canonical_key"] == "baby_spinach"
+
+
+def test_concurrent_scan_loser_returns_winners_stored_parse(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    winner_parse = parsed_receipt()
+    loser_parse = parsed_receipt().model_copy(deep=True)
+    loser_parse.items.append(
+        loser_parse.items[0].model_copy(
+            update={
+                "raw_text": "EXTRA LOSER ITEM",
+                "name": "Extra loser item",
+                "canonical_key": None,
+                "category": "unknown",
+                "unit_price": 1.0,
+                "line_total": 1.0,
+                "needs_review": True,
+            }
+        )
+    )
+
+    async def fake_parse(_jpeg_bytes: bytes) -> ReceiptParse:
+        return loser_parse
+
+    def concurrent_winner(
+        _parsed: ReceiptParse, **kwargs: object
+    ) -> PersistDraftResult:
+        created = persist_receipt_draft(
+            winner_parse,
+            image_hash=str(kwargs["image_hash"]),
+            image_content_hash=str(kwargs["image_content_hash"]),
+            purchased_at_fallback=str(kwargs["purchased_at_fallback"]),
+        )
+        return PersistDraftResult(created.receipt_id, created.item_ids, False)
+
+    monkeypatch.setattr(receipts, "parse_receipt_image", fake_parse)
+    monkeypatch.setattr(receipts, "persist_receipt_draft", concurrent_winner)
+    response = client.post(
+        "/v1/receipts/scan",
+        headers={"Authorization": "Bearer test-demo-token"},
+        files={"image": ("receipt.jpg", make_jpeg(width=613), "image/jpeg")},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert len(body["items"]) == 1
+    assert body["items"][0]["name"] == "Organic Baby Spinach"
+    stored = load_receipt_draft(body["receipt_id"])
+    assert stored is not None
+    assert len(stored.items) == 1
 
 
 @pytest.mark.parametrize(
@@ -402,6 +680,403 @@ def test_demo_review_confirm_and_pantry_flow(client: TestClient) -> None:
     assert spoiled.status_code == 200
     assert spoiled.json()["status"] == "spoiled"
     assert spoiled.json()["waste_event"]["cost_lost"] > 0
+
+
+def test_confirm_learns_only_an_explicit_grounded_name_correction(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parsed = parsed_receipt()
+    parsed.items[0].canonical_key = None
+    parsed.items[0].category = "unknown"
+
+    async def fake_parse(_jpeg_bytes: bytes) -> ReceiptParse:
+        return parsed
+
+    monkeypatch.setattr(receipts, "parse_receipt_image", fake_parse)
+    headers = {"Authorization": "Bearer test-demo-token"}
+    scan = client.post(
+        "/v1/receipts/scan",
+        headers=headers,
+        files={"image": ("receipt.jpg", make_jpeg(), "image/jpeg")},
+    )
+    assert scan.status_code == 201
+    draft = scan.json()
+
+    confirm = client.post(
+        f"/v1/receipts/{draft['receipt_id']}/confirm",
+        headers=headers,
+        json={
+            "items": [
+                {
+                    "item_id": draft["items"][0]["item_id"],
+                    "name": "Spinach",
+                }
+            ]
+        },
+    )
+    assert confirm.status_code == 200
+    learned = find_product_alias(
+        "Organic Baby Spinach", merchant_name="Test Market"
+    )
+    assert learned is not None
+    assert learned.canonical_key == "baby_spinach"
+    assert learned.display_name == "Spinach"
+    assert learned.confirmed_count == 1
+
+
+def test_confirm_does_not_learn_from_unchanged_form_values(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def fake_parse(_jpeg_bytes: bytes) -> ReceiptParse:
+        return parsed_receipt()
+
+    monkeypatch.setattr(receipts, "parse_receipt_image", fake_parse)
+    headers = {"Authorization": "Bearer test-demo-token"}
+    scan = client.post(
+        "/v1/receipts/scan",
+        headers=headers,
+        files={"image": ("receipt.jpg", make_jpeg(width=601), "image/jpeg")},
+    )
+    assert scan.status_code == 201
+    draft = scan.json()
+    item = draft["items"][0]
+
+    confirm = client.post(
+        f"/v1/receipts/{draft['receipt_id']}/confirm",
+        headers=headers,
+        json={
+            "items": [
+                {
+                    "item_id": item["item_id"],
+                    "name": item["name"],
+                    "qty": item["qty"],
+                    "unit": item["unit"],
+                    "unit_price": item["unit_price"],
+                    "category": item["category"],
+                    "excluded": item["excluded"],
+                }
+            ]
+        },
+    )
+    assert confirm.status_code == 200
+    assert (
+        find_product_alias("Organic Baby Spinach", merchant_name="Test Market")
+        is None
+    )
+
+
+def test_unmatched_name_correction_cannot_inherit_old_safety_identity(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parsed = parsed_receipt()
+    parsed.items[0].name = "Dry white rice"
+    parsed.items[0].canonical_key = "white_rice"
+    parsed.items[0].category = "pantry_staple"
+    parsed.items[0].is_perishable = False
+    parsed.items[0].storage = StoragePlan(
+        method="pantry", temp_c=20, duration_days=365
+    )
+    parsed.items[0].eat_by_window = None
+
+    async def fake_parse(_jpeg_bytes: bytes) -> ReceiptParse:
+        return parsed
+
+    monkeypatch.setattr(receipts, "parse_receipt_image", fake_parse)
+    headers = {"Authorization": "Bearer test-demo-token"}
+    scan = client.post(
+        "/v1/receipts/scan",
+        headers=headers,
+        files={"image": ("receipt.jpg", make_jpeg(width=602), "image/jpeg")},
+    )
+    assert scan.status_code == 201
+    draft = scan.json()
+
+    confirm = client.post(
+        f"/v1/receipts/{draft['receipt_id']}/confirm",
+        headers=headers,
+        json={
+            "items": [
+                {"item_id": draft["items"][0]["item_id"], "name": "Rice pudding"}
+            ]
+        },
+    )
+    assert confirm.status_code == 200
+
+    stored = load_receipt_draft(draft["receipt_id"])
+    assert stored is not None
+    corrected = stored.items[0]
+    assert corrected.canonical_key is None
+    assert corrected.category == "unknown"
+    assert corrected.is_perishable is True
+    assert corrected.needs_review is True
+    pantry_items = list_pantry_items()
+    assert len(pantry_items) == 1
+    assert pantry_items[0].category == "unknown"
+    assert pantry_items[0].shelf_life_source == "default"
+    assert pantry_items[0].storage_duration_days == 3
+    assert (
+        find_product_alias("Dry white rice", merchant_name="Test Market") is None
+    )
+
+
+def test_category_correction_regrounds_without_stale_storage_override(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parsed = parsed_receipt()
+    parsed.items[0].name = "Mystery produce"
+    parsed.items[0].canonical_key = "white_rice"
+    parsed.items[0].category = "pantry_staple"
+    parsed.items[0].is_perishable = False
+    parsed.items[0].storage = StoragePlan(
+        method="pantry", temp_c=20, duration_days=365
+    )
+    parsed.items[0].eat_by_window = None
+
+    async def fake_parse(_jpeg_bytes: bytes) -> ReceiptParse:
+        return parsed
+
+    monkeypatch.setattr(receipts, "parse_receipt_image", fake_parse)
+    headers = {"Authorization": "Bearer test-demo-token"}
+    scan = client.post(
+        "/v1/receipts/scan",
+        headers=headers,
+        files={"image": ("receipt.jpg", make_jpeg(width=609), "image/jpeg")},
+    ).json()
+    confirm = client.post(
+        f"/v1/receipts/{scan['receipt_id']}/confirm",
+        headers=headers,
+        json={
+            "items": [
+                {
+                    "item_id": scan["items"][0]["item_id"],
+                    "category": "produce",
+                    "storage_method_override": "pantry",
+                }
+            ]
+        },
+    )
+    assert confirm.status_code == 200
+    stored = load_receipt_draft(scan["receipt_id"])
+    assert stored is not None
+    corrected = stored.items[0]
+    assert corrected.canonical_key is None
+    assert corrected.category == "produce"
+    assert corrected.is_perishable is True
+    pantry_items = list_pantry_items()
+    assert len(pantry_items) == 1
+    assert pantry_items[0].storage_method == "fridge"
+    assert pantry_items[0].storage_duration_days == 5
+
+
+def test_conflicting_name_and_category_correction_cannot_learn_unsafe_alias(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parsed = parsed_receipt()
+    parsed.items[0].name = "Mystery Sku"
+    parsed.items[0].canonical_key = None
+    parsed.items[0].category = "unknown"
+
+    async def fake_parse(_jpeg_bytes: bytes) -> ReceiptParse:
+        return parsed
+
+    monkeypatch.setattr(receipts, "parse_receipt_image", fake_parse)
+    headers = {"Authorization": "Bearer test-demo-token"}
+    scan = client.post(
+        "/v1/receipts/scan",
+        headers=headers,
+        files={"image": ("receipt.jpg", make_jpeg(width=611), "image/jpeg")},
+    ).json()
+    confirm = client.post(
+        f"/v1/receipts/{scan['receipt_id']}/confirm",
+        headers=headers,
+        json={
+            "items": [
+                {
+                    "item_id": scan["items"][0]["item_id"],
+                    "name": "Rice",
+                    "category": "dairy",
+                }
+            ]
+        },
+    )
+    assert confirm.status_code == 200
+    stored = load_receipt_draft(scan["receipt_id"])
+    assert stored is not None
+    corrected = stored.items[0]
+    assert corrected.canonical_key is None
+    assert corrected.category == "dairy"
+    assert corrected.is_perishable is True
+    assert corrected.needs_review is True
+    pantry_items = list_pantry_items()
+    assert len(pantry_items) == 1
+    assert pantry_items[0].storage_method == "fridge"
+    assert pantry_items[0].storage_duration_days == 7
+    assert find_product_alias("Mystery Sku", merchant_name="Test Market") is None
+
+
+def test_unmatched_name_and_category_correction_uses_default_without_learning(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parsed = parsed_receipt()
+    parsed.items[0].name = "Mystery Juice Sku"
+    parsed.items[0].canonical_key = None
+    parsed.items[0].category = "unknown"
+
+    async def fake_parse(_jpeg_bytes: bytes) -> ReceiptParse:
+        return parsed
+
+    monkeypatch.setattr(receipts, "parse_receipt_image", fake_parse)
+    headers = {"Authorization": "Bearer test-demo-token"}
+    scan = client.post(
+        "/v1/receipts/scan",
+        headers=headers,
+        files={"image": ("receipt.jpg", make_jpeg(width=612), "image/jpeg")},
+    ).json()
+    confirm = client.post(
+        f"/v1/receipts/{scan['receipt_id']}/confirm",
+        headers=headers,
+        json={
+            "items": [
+                {
+                    "item_id": scan["items"][0]["item_id"],
+                    "name": "Apple juice",
+                    "category": "produce",
+                }
+            ]
+        },
+    )
+
+    assert confirm.status_code == 200
+    stored = load_receipt_draft(scan["receipt_id"])
+    assert stored is not None
+    corrected = stored.items[0]
+    assert corrected.name == "Apple juice"
+    assert corrected.canonical_key is None
+    assert corrected.category == "produce"
+    assert corrected.needs_review is True
+    pantry_items = list_pantry_items()
+    assert len(pantry_items) == 1
+    assert pantry_items[0].shelf_life_source == "default"
+    assert pantry_items[0].storage_method == "fridge"
+    assert pantry_items[0].storage_duration_days <= 5
+    assert (
+        find_product_alias("Mystery Juice Sku", merchant_name="Test Market")
+        is None
+    )
+
+
+def test_confirm_recomputes_line_total_receipt_sum_and_ledger_total(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parsed = parsed_receipt()
+    parsed.subtotal = None
+    parsed.tax = None
+    parsed.total = None
+
+    async def fake_parse(_jpeg_bytes: bytes) -> ReceiptParse:
+        return parsed
+
+    monkeypatch.setattr(receipts, "parse_receipt_image", fake_parse)
+    headers = {"Authorization": "Bearer test-demo-token"}
+    scan = client.post(
+        "/v1/receipts/scan",
+        headers=headers,
+        files={"image": ("receipt.jpg", make_jpeg(width=606), "image/jpeg")},
+    )
+    draft = scan.json()
+    confirm = client.post(
+        f"/v1/receipts/{draft['receipt_id']}/confirm",
+        headers=headers,
+        json={
+            "items": [
+                {
+                    "item_id": draft["items"][0]["item_id"],
+                    "qty": 2,
+                    "unit_price": 2.99,
+                }
+            ]
+        },
+    )
+    assert confirm.status_code == 200
+    assert confirm.json()["ledger_total"] == 5.98
+
+    stored = load_receipt_draft(draft["receipt_id"])
+    assert stored is not None
+    assert stored.items[0].qty == 2
+    assert stored.items[0].unit_price_cents == 299
+    assert stored.items[0].line_total_cents == 598
+    assert stored.computed_sum_cents == 598
+    assert stored.reconciliation_status == "unreadable"
+
+
+def test_alias_learning_requires_merchant_and_is_best_effort(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parsed = parsed_receipt()
+    parsed.store_name = None
+    parsed.items[0].canonical_key = None
+    parsed.items[0].category = "unknown"
+
+    async def fake_parse(_jpeg_bytes: bytes) -> ReceiptParse:
+        return parsed
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("merchantless corrections must not create global aliases")
+
+    monkeypatch.setattr(receipts, "parse_receipt_image", fake_parse)
+    monkeypatch.setattr(receipts, "upsert_product_alias", fail_if_called)
+    headers = {"Authorization": "Bearer test-demo-token"}
+    scan = client.post(
+        "/v1/receipts/scan",
+        headers=headers,
+        files={"image": ("receipt.jpg", make_jpeg(width=607), "image/jpeg")},
+    ).json()
+    confirm = client.post(
+        f"/v1/receipts/{scan['receipt_id']}/confirm",
+        headers=headers,
+        json={
+            "items": [
+                {"item_id": scan["items"][0]["item_id"], "name": "Spinach"}
+            ]
+        },
+    )
+    assert confirm.status_code == 200
+
+
+def test_alias_storage_failure_does_not_undo_a_confirmed_receipt(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parsed = parsed_receipt()
+    parsed.items[0].canonical_key = None
+    parsed.items[0].category = "unknown"
+
+    async def fake_parse(_jpeg_bytes: bytes) -> ReceiptParse:
+        return parsed
+
+    def fail_alias_write(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("simulated alias write failure")
+
+    monkeypatch.setattr(receipts, "parse_receipt_image", fake_parse)
+    monkeypatch.setattr(receipts, "upsert_product_alias", fail_alias_write)
+    headers = {"Authorization": "Bearer test-demo-token"}
+    scan = client.post(
+        "/v1/receipts/scan",
+        headers=headers,
+        files={"image": ("receipt.jpg", make_jpeg(width=608), "image/jpeg")},
+    ).json()
+    confirm = client.post(
+        f"/v1/receipts/{scan['receipt_id']}/confirm",
+        headers=headers,
+        json={
+            "items": [
+                {"item_id": scan["items"][0]["item_id"], "name": "Spinach"}
+            ]
+        },
+    )
+    assert confirm.status_code == 200
+    stored = load_receipt_draft(scan["receipt_id"])
+    assert stored is not None
+    assert stored.status == "confirmed"
 
 
 def test_framework_404_uses_user_message_envelope(client: TestClient) -> None:

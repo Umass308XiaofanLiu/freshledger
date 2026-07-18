@@ -1,19 +1,21 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from datetime import date
+from decimal import Decimal, ROUND_HALF_UP
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Request, UploadFile, status
 
 from ..auth import require_demo_token
-from ..config import get_settings
 from ..errors import AppError
 from ..models import (
     ConfirmReceiptRequest,
     ConfirmReceiptResponse,
     ReceiptDraft,
+    ReceiptDraftItem,
     ReceiptLineItem,
-    ScanProvenance,
 )
 from ..rate_limit import limiter, scan_daily_limit, scan_minute_limit, standard_minute_limit
 from ..services.images import MAX_UPLOAD_BYTES, prepare_receipt_image
@@ -26,10 +28,18 @@ from ..services.receipt_store import (
     load_receipt_draft,
     load_receipt_draft_by_image_hash,
     list_receipt_records,
+    normalize_product_alias_key,
     persist_receipt_draft,
+    upsert_product_alias,
+)
+from ..services.product_matcher import match_product
+from ..services.recognition import (
+    apply_confirmed_aliases,
+    recognition_cache_key,
+    recognition_provenance,
+    recognize_receipt_image as parse_receipt_image,
 )
 from ..services.shelf_life import resolve_item
-from ..services.vision import parse_receipt_image
 
 
 router = APIRouter(
@@ -37,6 +47,7 @@ router = APIRouter(
     tags=["receipts"],
     dependencies=[Depends(require_demo_token)],
 )
+logger = logging.getLogger(__name__)
 
 
 def _store_error(exc: Exception) -> AppError:
@@ -54,16 +65,6 @@ def _store_error(exc: Exception) -> AppError:
         "INVALID_RECEIPT",
         str(exc),
         "Some receipt details were invalid — check them and try again.",
-    )
-
-
-def _live_provenance() -> ScanProvenance:
-    return ScanProvenance(
-        mode="live",
-        ai_called=True,
-        provider="openai",
-        model=get_settings().openai_model,
-        fixture_id=None,
     )
 
 
@@ -112,7 +113,9 @@ async def list_receipts(request: Request) -> dict[str, object]:
 @limiter.limit(scan_daily_limit)
 @limiter.limit(scan_minute_limit)
 async def scan_receipt(
-    request: Request, image: UploadFile = File(...)
+    request: Request,
+    image: UploadFile = File(...),
+    engine: Literal["offline"] | None = None,
 ) -> ReceiptDraft:
     content_length = request.headers.get("content-length")
     if content_length:
@@ -128,19 +131,32 @@ async def scan_receipt(
             pass
 
     raw_bytes = await image.read(MAX_UPLOAD_BYTES + 1)
-    image_hash = hashlib.sha256(raw_bytes).hexdigest()
+    image_content_hash = hashlib.sha256(raw_bytes).hexdigest()
+    image_hash = recognition_cache_key(image_content_hash, engine=engine)
 
     existing = load_receipt_draft_by_image_hash(image_hash)
     if existing is not None and existing.raw_parse is not None:
+        if existing.status != "draft":
+            raise AppError(
+                409,
+                "RECEIPT_ALREADY_IMPORTED",
+                f"Receipt image is already stored as receipt {existing.id}.",
+                "This receipt is already in your ledger.",
+            )
+        cached_parse = apply_confirmed_aliases(existing.raw_parse)
         return build_receipt_draft(
-            existing.raw_parse,
+            cached_parse,
             receipt_id=existing.id,
             item_ids=[item.id for item in existing.items],
-            provenance=_live_provenance(),
+            provenance=recognition_provenance(engine=engine),
         )
 
     jpeg_bytes = prepare_receipt_image(raw_bytes)
-    parsed = await parse_receipt_image(jpeg_bytes)
+    parsed = (
+        await parse_receipt_image(jpeg_bytes)
+        if engine is None
+        else await parse_receipt_image(jpeg_bytes, engine=engine)
+    )
     if parsed.image_quality_issue is not None and parsed.overall_confidence < 0.5:
         raise retake_error(parsed)
 
@@ -152,17 +168,44 @@ async def scan_receipt(
         persisted = persist_receipt_draft(
             parsed,
             image_hash=image_hash,
+            image_content_hash=image_content_hash,
             resolved_items=preliminary_items,
             purchased_at_fallback=date.today().isoformat(),
         )
     except (StoreValidationError, StoreConflictError) as exc:
         raise _store_error(exc) from exc
 
+    if not persisted.created:
+        # Another request won the same-image insert after our initial cache
+        # check. Return the winner's stored parse and IDs, never this request's
+        # potentially divergent recognition result.
+        winner = load_receipt_draft(persisted.receipt_id)
+        if winner is None or winner.raw_parse is None:
+            raise AppError(
+                409,
+                "RECEIPT_ALREADY_IMPORTED",
+                "The receipt was imported concurrently but could not be reloaded.",
+                "This receipt is already being processed; reopen it from your ledger.",
+            )
+        if winner.status != "draft":
+            raise AppError(
+                409,
+                "RECEIPT_ALREADY_IMPORTED",
+                f"Receipt image is already stored as receipt {winner.id}.",
+                "This receipt is already in your ledger.",
+            )
+        return build_receipt_draft(
+            apply_confirmed_aliases(winner.raw_parse),
+            receipt_id=winner.id,
+            item_ids=[item.id for item in winner.items],
+            provenance=recognition_provenance(engine=engine),
+        )
+
     return build_receipt_draft(
         parsed,
         receipt_id=persisted.receipt_id,
         item_ids=list(persisted.item_ids),
-        provenance=_live_provenance(),
+        provenance=recognition_provenance(engine=engine),
     )
 
 
@@ -183,38 +226,154 @@ async def confirm_receipt(
             "That receipt could not be found.",
         )
 
+    payload_ids = [item.item_id for item in payload.items]
+    if len(payload_ids) != len(set(payload_ids)):
+        raise AppError(
+            422,
+            "DUPLICATE_ITEM",
+            "The confirmation payload contained a duplicate receipt item ID.",
+            "Review each receipt item exactly once before confirming.",
+        )
+    stored_ids = {item.id for item in record.items}
+    missing_ids = stored_ids - set(payload_ids)
+    if missing_ids:
+        missing_id = min(missing_ids)
+        raise AppError(
+            422,
+            "MISSING_ITEM",
+            f"Receipt item {missing_id} was omitted from confirmation.",
+            "Review every receipt item before confirming.",
+        )
+    extra_ids = set(payload_ids) - stored_ids
+    if extra_ids:
+        raise AppError(
+            422,
+            "UNKNOWN_ITEM",
+            f"Receipt item {min(extra_ids)} does not belong to receipt {receipt_id}.",
+            "Refresh the receipt review and try again.",
+        )
+
     edits = {item.item_id: item for item in payload.items}
     resolved_items = []
+    alias_learnings: list[tuple[str, ReceiptDraftItem]] = []
     for original, stored in zip(record.raw_parse.items, record.items, strict=True):
         edit = edits.get(stored.id)
-        if edit is None:
+        if edit is None:  # exact ID-set validation above makes this unreachable
+            raise RuntimeError("validated receipt item edit was missing")
+        if edit.name is not None and not edit.name.strip():
             raise AppError(
                 422,
-                "MISSING_ITEM",
-                f"Receipt item {stored.id} was omitted from confirmation.",
-                "Review every receipt item before confirming.",
+                "INVALID_RECEIPT",
+                f"Receipt item {stored.id} had an empty corrected name.",
+                "Give each receipt item a name before confirming.",
             )
+        explicit_name_change = (
+            edit.name is not None
+            and normalize_product_alias_key(edit.name)
+            != normalize_product_alias_key(stored.name)
+        )
+        explicit_category_change = (
+            edit.category is not None and edit.category != stored.category
+        )
+        grounded_name_change = False
         updates: dict[str, object] = {}
         for field in ("name", "qty", "unit", "unit_price", "category"):
             value = getattr(edit, field)
             if value is not None:
-                updates[field] = value
-        if "name" in updates:
+                updates[field] = value.strip() if field == "name" else value
+        if "qty" in updates or "unit_price" in updates:
+            corrected_qty = Decimal(str(updates.get("qty", original.qty)))
+            corrected_unit_price = Decimal(
+                str(updates.get("unit_price", original.unit_price))
+            )
+            corrected_line_total = (corrected_qty * corrected_unit_price).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+            if not Decimal("-500") <= corrected_line_total <= Decimal("500"):
+                raise AppError(
+                    422,
+                    "INVALID_RECEIPT",
+                    "The corrected item total exceeded the supported range.",
+                    "Check the item quantity and price, then try again.",
+                )
+            updates["line_total"] = float(corrected_line_total)
+        if explicit_name_change:
             updates["canonical_key"] = None
+            exact_match = match_product(
+                str(updates["name"]), ocr_confidence=1.0
+            )
+            if (
+                exact_match.method == "exact"
+                and exact_match.canonical_key is not None
+                and not (
+                    explicit_category_change
+                    and edit.category != exact_match.category
+                )
+            ):
+                grounded_name_change = True
+                updates.update(
+                    canonical_key=exact_match.canonical_key,
+                    category=exact_match.category,
+                    is_perishable=exact_match.is_perishable,
+                    storage=None,
+                    eat_by_window=None,
+                )
+            else:
+                # A changed identity cannot inherit safety attributes from
+                # the OCR guess it replaced. Abstain and let resolve_item
+                # apply the conservative unknown-food default instead.
+                updates.update(
+                    canonical_key=None,
+                    category="unknown",
+                    is_perishable=True,
+                    storage=None,
+                    eat_by_window=None,
+                    confidence=min(original.confidence, 0.5),
+                    needs_review=True,
+                )
+        if explicit_category_change and not grounded_name_change:
+            # Preserve the user's explicit category even when an incompatible
+            # simultaneous name correction forced the identity to abstain.
+            selected_category = str(edit.category)
+            updates.update(
+                canonical_key=None,
+                category=selected_category,
+                is_perishable=selected_category != "non_food",
+                storage=None,
+                eat_by_window=None,
+                needs_review=selected_category != "non_food",
+            )
         if updates.get("category") == "non_food":
             updates["is_perishable"] = False
             updates["storage"] = None
             updates["eat_by_window"] = None
         edited: ReceiptLineItem = original.model_copy(update=updates)
         excluded = edit.excluded if edit.excluded is not None else stored.excluded
-        resolved_items.append(
-            resolve_item(
-                edited,
-                item_id=stored.id,
-                excluded=excluded,
-                method_override=edit.storage_method_override,
-            )
+        resolved = resolve_item(
+            edited,
+            item_id=stored.id,
+            excluded=excluded,
+            method_override=(
+                None
+                if explicit_name_change or explicit_category_change
+                else edit.storage_method_override
+            ),
+            allow_reference=not (
+                (explicit_name_change or explicit_category_change)
+                and not grounded_name_change
+            ),
         )
+        resolved_items.append(resolved)
+        # Supplying every form field is not a correction. Learn only when the
+        # user explicitly changed the product name and it grounded to a trusted
+        # shelf-life canonical key.
+        if (
+            explicit_name_change
+            and grounded_name_change
+            and resolved.canonical_key is not None
+            and not resolved.excluded
+        ):
+            alias_learnings.append((stored.name, resolved))
 
     try:
         result = confirm_receipt_in_store(
@@ -225,6 +384,26 @@ async def confirm_receipt(
         )
     except (RecordNotFoundError, StoreConflictError, StoreValidationError) as exc:
         raise _store_error(exc) from exc
+
+    merchant_name = (
+        payload.store_name if payload.store_name is not None else record.store_name
+    )
+    for raw_text, learned in alias_learnings:
+        if not merchant_name:
+            continue
+        if learned.canonical_key is None:  # guarded when the learning is queued
+            continue
+        try:
+            upsert_product_alias(
+                raw_text,
+                canonical_key=learned.canonical_key,
+                display_name=learned.name,
+                category=learned.category,
+                is_perishable=learned.is_perishable,
+                merchant_name=merchant_name,
+            )
+        except Exception:  # learning is best-effort after the atomic confirmation
+            logger.warning("Could not persist a confirmed product alias.", exc_info=True)
 
     pantry_records = []
     if result.pantry_item_ids:
@@ -242,10 +421,9 @@ async def confirm_receipt(
         for item in pantry_records
         if (date.fromisoformat(item.best_by) - today).days <= 3
     ]
-    ledger_cents = record.total_cents if record.total_cents is not None else record.computed_sum_cents
     return ConfirmReceiptResponse(
         receipt_id=receipt_id,
         pantry_items_created=len(result.pantry_item_ids),
-        ledger_total=ledger_cents / 100,
+        ledger_total=result.ledger_total_cents / 100,
         expiring_soon=expiring_soon,
     )

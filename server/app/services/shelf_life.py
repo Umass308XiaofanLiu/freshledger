@@ -58,6 +58,39 @@ CATEGORY_DEFAULTS: dict[str, CategoryDefault] = {
     "unknown": CategoryDefault("fridge", 4, 3, 3, 30, None),
 }
 
+PREPARED_COMPOUND_TOKENS = {
+    "bowl",
+    "cooked",
+    "leftover",
+    "leftovers",
+    "meal",
+    "prepared",
+    "pudding",
+    "salad",
+    "sandwich",
+    "soup",
+    "wrap",
+}
+
+PANTRY_CONTRADICTION_TOKENS = PREPARED_COMPOUND_TOKENS | {
+    "chilled",
+    "fresh",
+    "frozen",
+    "moist",
+    "opened",
+    "refrigerated",
+    "wet",
+}
+
+REFERENCE_IGNORED_MODIFIERS = {
+    "boneless",
+    "brand",
+    "large",
+    "medium",
+    "organic",
+    "small",
+}
+
 
 @dataclass(frozen=True)
 class ShelfLifeRow:
@@ -103,8 +136,10 @@ def _condition_is_compatible(item: ReceiptLineItem, row: ShelfLifeRow) -> bool:
         )
     )
     row_tokens = set(_normalize(row_text).split())
+    if item_tokens & PANTRY_CONTRADICTION_TOKENS and row.category == "pantry_staple":
+        return False
     condition_groups = (
-        {"cooked", "prepared", "leftover", "leftovers"},
+        PREPARED_COMPOUND_TOKENS,
         {"raw", "uncooked"},
         {"opened"},
         {"unopened"},
@@ -153,6 +188,34 @@ def load_reference_rows() -> tuple[ShelfLifeRow, ...]:
     return tuple(rows)
 
 
+def _identity_forms(value: str, row: ShelfLifeRow) -> set[str]:
+    normalized = _normalize(value)
+    if not normalized:
+        return set()
+    ignored = set(REFERENCE_IGNORED_MODIFIERS)
+    # "Fresh" is a harmless merchandising modifier for produce/meat/bakery,
+    # but safety-material for dry pantry staples such as pasta and rice.
+    if row.category != "pantry_staple":
+        ignored.add("fresh")
+    compact = " ".join(
+        token for token in normalized.split() if token not in ignored
+    )
+    return {form for form in (normalized, compact) if form}
+
+
+def _identity_matches_reference(item: ReceiptLineItem, row: ShelfLifeRow) -> bool:
+    aliases = {
+        _normalize(alias)
+        for alias in (
+            *row.aliases,
+            row.display_name,
+            row.canonical_key.replace("_", " "),
+        )
+        if _normalize(alias)
+    }
+    return bool(_identity_forms(item.name, row) & aliases)
+
+
 def find_reference(item: ReceiptLineItem) -> ShelfLifeRow | None:
     rows = tuple(
         row for row in load_reference_rows() if row.category == item.category
@@ -163,27 +226,24 @@ def find_reference(item: ReceiptLineItem) -> ShelfLifeRow | None:
             (
                 row
                 for row in rows
-                if row.canonical_key == key and _condition_is_compatible(item, row)
+                if row.canonical_key == key
+                and _identity_matches_reference(item, row)
+                and _condition_is_compatible(item, row)
             ),
             None,
         )
         if exact is not None:
             return exact
 
-    normalized_name = _normalize(item.name)
-    matches: list[tuple[int, ShelfLifeRow]] = []
+    matches: list[ShelfLifeRow] = []
     for row in rows:
-        if not _condition_is_compatible(item, row):
+        if not _condition_is_compatible(item, row) or not _identity_matches_reference(
+            item, row
+        ):
             continue
-        candidates = (*row.aliases, row.display_name, row.canonical_key.replace("_", " "))
-        for alias in candidates:
-            normalized_alias = _normalize(alias)
-            if (
-                normalized_alias
-                and f" {normalized_alias} " in f" {normalized_name} "
-            ):
-                matches.append((len(normalized_alias), row))
-    return max(matches, key=lambda match: match[0])[1] if matches else None
+        matches.append(row)
+    canonical_keys = {row.canonical_key for row in matches}
+    return matches[0] if len(canonical_keys) == 1 else None
 
 
 def _temperature_for(method: str, reference_temp: float | None = None) -> float:
@@ -272,6 +332,7 @@ def resolve_item(
     item_id: int,
     excluded: bool | None = None,
     method_override: str | None = None,
+    allow_reference: bool = True,
 ) -> ReceiptDraftItem:
     item = _sanitize_item(item)
     excluded = item.category == "non_food" if excluded is None else excluded
@@ -293,11 +354,47 @@ def resolve_item(
     # A model-classified perishable pantry staple is internally contradictory:
     # short aliases such as "rice" or "pasta" must not turn rice pudding or
     # pasta salad into a 365-day dry-good recommendation.
+    contradictory_pantry_identity = item.category == "pantry_staple" and (
+        item.is_perishable
+        or bool(set(_normalize(item.name).split()) & PANTRY_CONTRADICTION_TOKENS)
+    )
+    if contradictory_pantry_identity:
+        item = item.model_copy(
+            update={
+                "canonical_key": None,
+                "category": "unknown",
+                "is_perishable": True,
+                "storage": None,
+                "eat_by_window": None,
+                "needs_review": True,
+            }
+        )
     reference = (
         None
-        if item.is_perishable and item.category == "pantry_staple"
+        if contradictory_pantry_identity or not allow_reference
         else find_reference(item)
     )
+    unresolved_prepared_identity = (
+        reference is None
+        and bool(set(_normalize(item.name).split()) & PREPARED_COMPOUND_TOKENS)
+    )
+    if unresolved_prepared_identity and not contradictory_pantry_identity:
+        item = item.model_copy(
+            update={
+                "canonical_key": None,
+                "category": "unknown",
+                "is_perishable": True,
+                "storage": None,
+                "eat_by_window": None,
+                "needs_review": True,
+            }
+        )
+    elif reference is None and item.canonical_key is not None:
+        # A model-supplied or edited canonical key is untrusted unless the clean
+        # item name is also an exact explicit alias for that reference row.
+        item = item.model_copy(
+            update={"canonical_key": None, "needs_review": True}
+        )
     if reference is not None:
         method = method_override or reference.recommended_method
         duration = reference.days_for(method)

@@ -28,10 +28,10 @@ whole_milk,Whole milk,dairy,fridge,7,90,,4,5,7,"[""whole milk"",""gallon milk""]
 skim_milk,Skim milk,dairy,fridge,7,90,,4,5,7,"[""skim milk"",""nonfat milk""]",Opened refrigerated milk; follow an earlier package date.
 buttermilk,Buttermilk,dairy,fridge,7,90,,4,5,7,"[""buttermilk""]",Opened refrigerated cultured milk; follow package directions.
 plain_yogurt,Plain yogurt,dairy,fridge,14,60,,4,10,14,"[""plain yogurt"",""yogurt""]",Refrigerated opened yogurt; discard if mold appears.
-greek_yogurt,Greek yogurt,dairy,fridge,14,60,,4,10,14,"[""greek yogurt""]",Refrigerated opened yogurt; follow an earlier package date.
+greek_yogurt,Greek yogurt,dairy,fridge,14,60,,4,10,14,"[""greek yogurt"",""plain greek yogurt""]",Refrigerated opened yogurt; follow an earlier package date.
 cottage_cheese,Cottage cheese,dairy,fridge,7,90,,4,5,7,"[""cottage cheese""]",Opened soft cheese; keep tightly covered and refrigerated.
 cream_cheese,Cream cheese,dairy,fridge,14,60,,4,10,14,"[""cream cheese""]",Opened cream cheese; keep tightly covered and refrigerated.
-hard_cheese,Hard cheese,dairy,fridge,21,180,,4,14,21,"[""hard cheese"",""cheddar"",""parmesan""]",Opened hard cheese; trim only according to USDA mold guidance.
+hard_cheese,Hard cheese,dairy,fridge,21,180,,4,14,21,"[""hard cheese"",""cheddar"",""cheddar cheese"",""parmesan""]",Opened hard cheese; trim only according to USDA mold guidance.
 butter,Butter,dairy,fridge,60,270,,4,45,60,"[""butter"",""salted butter"",""unsalted butter""]",Opened butter; keep wrapped to prevent odor absorption.
 margarine,Margarine,dairy,fridge,180,365,,4,150,180,"[""margarine""]",Opened refrigerated spread; follow an earlier package date.
 sour_cream,Sour cream,dairy,fridge,14,60,,4,10,14,"[""sour cream""]",Opened cultured dairy; discard if mold appears.
@@ -60,7 +60,7 @@ raw_scallops,Raw scallops,seafood,fridge,2,90,,4,1,2,"[""scallops"",""raw scallo
 fresh_crab,Fresh crab meat,seafood,fridge,2,90,,4,1,2,"[""crab meat"",""fresh crab""]",Fresh cooked or picked crab; keep very cold.
 fresh_lobster,Fresh lobster meat,seafood,fridge,2,90,,4,1,2,"[""lobster meat"",""fresh lobster""]",Fresh cooked or picked lobster; keep very cold.
 fresh_oysters,Fresh shucked oysters,seafood,fridge,2,90,,4,1,2,"[""oysters"",""shucked oysters""]",Shucked shellfish; keep very cold and use promptly.
-sourdough_bread,Sourdough bread,bakery,pantry,7,90,4,20,3,4,"[""sourdough"",""sourdough bread""]",Fresh bakery loaf at room temperature; freeze for longer storage.
+sourdough_bread,Sourdough bread,bakery,pantry,7,90,4,20,3,4,"[""sourdough"",""sourdough bread"",""sourdough loaf""]",Fresh bakery loaf at room temperature; freeze for longer storage.
 sandwich_bread,Sandwich bread,bakery,pantry,7,90,5,20,3,5,"[""sandwich bread"",""sliced bread""]",Commercial or fresh loaf; follow an earlier package date.
 bagels,Bagels,bakery,pantry,7,90,5,20,3,5,"[""bagel"",""bagels""]",Room-temperature bread product; freeze for longer storage.
 dinner_rolls,Dinner rolls,bakery,pantry,7,90,5,20,3,5,"[""dinner rolls"",""bread rolls""]",Room-temperature bread product; freeze for longer storage.
@@ -84,7 +84,7 @@ apple_cider,Apple cider,beverage,fridge,7,240,,4,5,7,"[""apple cider""]",Opened 
 plant_milk,Plant-based milk,beverage,fridge,7,90,,4,5,7,"[""almond milk"",""oat milk"",""soy milk""]",Opened refrigerated or shelf-stable beverage; follow package directions.
 brewed_coffee,Brewed coffee,beverage,fridge,3,,,4,2,3,"[""brewed coffee"",""cold coffee""]",Plain brewed coffee; milk or cream additions may shorten storage.
 brewed_tea,Brewed tea,beverage,fridge,3,,,4,2,3,"[""brewed tea"",""iced tea""]",Plain brewed tea; milk additions may shorten storage.
-white_rice,Dry white rice,pantry_staple,pantry,,,365,20,270,365,"[""white rice"",""dry rice"",""rice""]",Dry uncooked product in a sealed container; keep cool and dry.
+white_rice,Dry white rice,pantry_staple,pantry,,,365,20,270,365,"[""white rice"",""dry rice"",""long grain rice"",""rice""]",Dry uncooked product in a sealed container; keep cool and dry.
 dry_pasta,Dry pasta,pantry_staple,pantry,,,365,20,270,365,"[""dry pasta"",""pasta"",""spaghetti""]",Dry uncooked product in a sealed container; keep cool and dry.
 all_purpose_flour,All-purpose flour,pantry_staple,pantry,,365,180,20,120,180,"[""all purpose flour"",""flour""]",Dry product in a sealed container; discard if insects or rancid odor appear.
 granulated_sugar,Granulated sugar,pantry_staple,pantry,,,365,20,270,365,"[""granulated sugar"",""white sugar"",""sugar""]",Keep dry in a sealed container.
@@ -96,10 +96,10 @@ dry_lentils,Dry lentils,pantry_staple,pantry,,,365,20,270,365,"[""dry lentils"",
 canned_beans,Canned beans,pantry_staple,pantry,4,,365,20,270,365,"[""canned beans"",""canned black beans"",""beans canned""]",Unopened low-acid can; refrigerate after opening and use within 4 days.
 canned_tomatoes,Canned tomatoes,pantry_staple,pantry,5,,365,20,270,365,"[""canned tomatoes"",""tomatoes canned""]",Unopened high-acid can; refrigerate after opening and use within 5 days.
 peanut_butter,Peanut butter,pantry_staple,pantry,120,,90,20,60,90,"[""peanut butter""]",Opened commercial product; follow label if refrigeration is required.
-cooking_oil,Cooking oil,pantry_staple,pantry,,,180,20,120,180,"[""cooking oil"",""vegetable oil"",""olive oil""]",Opened oil; keep tightly closed away from heat and light.
+cooking_oil,Cooking oil,pantry_staple,pantry,,,180,20,120,180,"[""cooking oil"",""vegetable oil"",""olive oil"",""extra virgin olive oil""]",Opened oil; keep tightly closed away from heat and light.
 vinegar,Vinegar,pantry_staple,pantry,,,365,20,270,365,"[""vinegar"",""white vinegar""]",Keep tightly closed away from heat and light; quality limit only.
 honey,Honey,pantry_staple,pantry,,,365,20,270,365,"[""honey""]",Keep tightly closed at room temperature; crystallization is not spoilage.
 eggs,Eggs,dairy,fridge,21,,,4,14,21,"[""eggs"",""large eggs"",""shell eggs"",""dozen eggs""]",Raw shell eggs refrigerated promptly; do not freeze in shell.
 mixed_greens,Mixed greens,produce,fridge,5,,,4,2,5,"[""mixed greens"",""spring mix"",""salad greens""]",Fresh bagged greens; use sooner if wilted or slimy.
-deli_turkey,Deli turkey,deli,fridge,3,30,,4,2,3,"[""deli turkey"",""sliced turkey"",""turkey lunch meat""]",Opened or deli-sliced luncheon meat; conservative lower end of federal range.
+deli_turkey,Deli turkey,deli,fridge,3,30,,4,2,3,"[""deli turkey"",""sliced turkey"",""sliced deli turkey"",""turkey lunch meat""]",Opened or deli-sliced luncheon meat; conservative lower end of federal range.
 sparkling_water,Sparkling water,beverage,pantry,,,180,20,120,180,"[""sparkling water"",""seltzer water"",""carbonated water""]",Unopened shelf-stable beverage; refrigerate after opening and follow label.

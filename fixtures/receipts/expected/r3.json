@@ -10,7 +10,7 @@
     {
       "raw_text": "SALMON FILLET 1.18LB     14.15",
       "name": "Salmon fillet",
-      "canonical_key": "raw_salmon",
+      "canonical_key": "fresh_salmon",
       "qty": 1.18,
       "unit": "lb",
       "unit_price": 11.99,
@@ -32,7 +32,7 @@
     {
       "raw_text": "GROUND BEEF 1.35LB        8.76",
       "name": "Ground beef",
-      "canonical_key": "raw_ground_beef",
+      "canonical_key": "ground_beef",
       "qty": 1.35,
       "unit": "lb",
       "unit_price": 6.49,
@@ -120,7 +120,7 @@
     {
       "raw_text": "CHEDDAR CHEESE 8OZ        5.99",
       "name": "Cheddar cheese",
-      "canonical_key": "cheddar_cheese",
+      "canonical_key": "hard_cheese",
       "qty": 1,
       "unit": "each",
       "unit_price": 5.99,
@@ -161,7 +161,7 @@
     {
       "raw_text": "EXTRA VIRGIN OLIVE OIL   12.99",
       "name": "Extra-virgin olive oil",
-      "canonical_key": "olive_oil",
+      "canonical_key": "cooking_oil",
       "qty": 1,
       "unit": "each",
       "unit_price": 12.99,

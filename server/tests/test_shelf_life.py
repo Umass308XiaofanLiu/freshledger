@@ -36,10 +36,13 @@ def test_cooked_rice_cannot_match_dry_rice_reference() -> None:
     )
 
     resolved = resolve_item(cooked_rice, item_id=1)
-    assert resolved.shelf_life_source == "llm_clamped"
+    assert resolved.canonical_key is None
+    assert resolved.category == "unknown"
+    assert resolved.shelf_life_source == "default"
+    assert resolved.needs_review is True
     assert resolved.storage is not None
     assert resolved.storage.method == "fridge"
-    assert resolved.storage.duration_days <= 5
+    assert resolved.storage.duration_days <= 3
     assert resolved.eat_by_window is not None
     assert resolved.eat_by_window.end_days <= resolved.storage.duration_days
 
@@ -67,6 +70,136 @@ def test_perishable_pantry_staple_without_storage_uses_unknown_fridge_default() 
     assert resolved.storage is not None
     assert resolved.storage.method == "fridge"
     assert resolved.storage.duration_days <= 3
+
+
+@pytest.mark.parametrize("name", ["Fresh pasta", "Fresh rice"])
+def test_fresh_food_cannot_unlock_dry_pantry_reference(name: str) -> None:
+    item = ReceiptLineItem(
+        raw_text=name.upper(),
+        name=name,
+        canonical_key="dry_pasta" if "pasta" in name.lower() else "white_rice",
+        qty=1,
+        unit="each",
+        unit_price=3.99,
+        line_total=3.99,
+        category="pantry_staple",
+        is_perishable=True,
+        storage=None,
+        eat_by_window=None,
+        confidence=0.6,
+        needs_review=True,
+    )
+
+    resolved = resolve_item(item, item_id=1)
+    assert resolved.canonical_key is None
+    assert resolved.shelf_life_source == "default"
+    assert resolved.needs_review is True
+    assert resolved.storage is not None
+    assert resolved.storage.method == "fridge"
+    assert resolved.storage.duration_days <= 3
+
+
+@pytest.mark.parametrize(
+    ("name", "canonical_key"),
+    [
+        ("Fresh pasta", "dry_pasta"),
+        ("Rice pudding", "white_rice"),
+        ("Pasta salad", "dry_pasta"),
+        ("Opened canned beans", "canned_black_beans"),
+    ],
+)
+def test_pantry_conflict_overrules_false_nonperishable_model_claim(
+    name: str, canonical_key: str
+) -> None:
+    item = ReceiptLineItem(
+        raw_text=name.upper(),
+        name=name,
+        canonical_key=canonical_key,
+        qty=1,
+        unit="each",
+        unit_price=4.99,
+        line_total=4.99,
+        category="pantry_staple",
+        is_perishable=False,
+        storage=StoragePlan(method="pantry", temp_c=20, duration_days=365),
+        eat_by_window=EatByWindow(start_days=270, end_days=365),
+        confidence=0.99,
+        needs_review=False,
+    )
+
+    resolved = resolve_item(item, item_id=1)
+    assert resolved.canonical_key is None
+    assert resolved.category == "unknown"
+    assert resolved.is_perishable is True
+    assert resolved.shelf_life_source == "default"
+    assert resolved.needs_review is True
+    assert resolved.storage is not None
+    assert resolved.storage.method == "fridge"
+    assert resolved.storage.duration_days <= 3
+    assert resolved.eat_by_window is not None
+    assert resolved.eat_by_window.end_days <= 3
+
+
+def test_compound_food_cannot_inherit_cross_category_reference() -> None:
+    item = ReceiptLineItem(
+        raw_text="EGG SALAD",
+        name="Egg salad",
+        canonical_key="eggs",
+        qty=1,
+        unit="each",
+        unit_price=5.99,
+        line_total=5.99,
+        category="dairy",
+        is_perishable=False,
+        storage=StoragePlan(method="fridge", temp_c=4, duration_days=21),
+        eat_by_window=EatByWindow(start_days=14, end_days=21),
+        confidence=0.99,
+        needs_review=False,
+    )
+
+    resolved = resolve_item(item, item_id=1)
+    assert resolved.canonical_key is None
+    assert resolved.category == "unknown"
+    assert resolved.is_perishable is True
+    assert resolved.shelf_life_source == "default"
+    assert resolved.needs_review is True
+    assert resolved.storage is not None
+    assert resolved.storage.method == "fridge"
+    assert resolved.storage.duration_days <= 3
+
+
+@pytest.mark.parametrize(
+    ("name", "category", "canonical_key", "max_days"),
+    [
+        ("Apple juice", "produce", "apple", 5),
+        ("Salmon dog food", "seafood", "fresh_salmon", 2),
+    ],
+)
+def test_contained_alias_cannot_unlock_reference(
+    name: str, category: str, canonical_key: str, max_days: int
+) -> None:
+    item = ReceiptLineItem(
+        raw_text=name.upper(),
+        name=name,
+        canonical_key=canonical_key,
+        qty=1,
+        unit="each",
+        unit_price=4.99,
+        line_total=4.99,
+        category=category,
+        is_perishable=True,
+        storage=None,
+        eat_by_window=None,
+        confidence=0.9,
+        needs_review=False,
+    )
+
+    resolved = resolve_item(item, item_id=1)
+    assert resolved.canonical_key is None
+    assert resolved.shelf_life_source == "default"
+    assert resolved.needs_review is True
+    assert resolved.storage is not None
+    assert resolved.storage.duration_days <= max_days
 
 
 @pytest.mark.parametrize(

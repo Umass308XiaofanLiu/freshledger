@@ -54,7 +54,7 @@
     {
       "raw_text": "FROZEN MIXED BERRIES      8.99",
       "name": "Frozen mixed berries",
-      "canonical_key": "frozen_mixed_berries",
+      "canonical_key": "frozen_berries",
       "qty": 1,
       "unit": "pack",
       "unit_price": 8.99,
@@ -76,7 +76,7 @@
     {
       "raw_text": "LONG GRAIN RICE 5LB       4.79",
       "name": "Long-grain rice",
-      "canonical_key": "dry_white_rice",
+      "canonical_key": "white_rice",
       "qty": 1,
       "unit": "pack",
       "unit_price": 4.79,
@@ -95,7 +95,7 @@
     {
       "raw_text": "CANNED BLACK BEANS X3     3.87",
       "name": "Canned black beans",
-      "canonical_key": "canned_black_beans",
+      "canonical_key": "canned_beans",
       "qty": 3,
       "unit": "each",
       "unit_price": 1.29,
@@ -136,7 +136,7 @@
     {
       "raw_text": "PAPER TOWELS 6PK          7.49",
       "name": "Paper towels",
-      "canonical_key": "paper_towels",
+      "canonical_key": null,
       "qty": 1,
       "unit": "pack",
       "unit_price": 7.49,

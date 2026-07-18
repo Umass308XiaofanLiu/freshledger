@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS receipts (
   store_name            TEXT,
   purchased_at          TEXT NOT NULL,
   image_hash            TEXT UNIQUE,
+  image_content_hash    TEXT,
   subtotal_cents        INTEGER,
   tax_cents             INTEGER,
   total_cents           INTEGER,
@@ -111,6 +112,24 @@ CREATE TABLE IF NOT EXISTS ai_call_usage (
   called_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_ai_call_usage_day ON ai_call_usage(called_at);
+
+CREATE TABLE IF NOT EXISTS product_aliases (
+  id                  INTEGER PRIMARY KEY,
+  normalized_raw_line TEXT NOT NULL,
+  merchant_key        TEXT NOT NULL DEFAULT '',
+  raw_line            TEXT NOT NULL,
+  merchant_name       TEXT,
+  canonical_key       TEXT NOT NULL,
+  display_name        TEXT NOT NULL,
+  category            TEXT NOT NULL,
+  is_perishable       INTEGER NOT NULL,
+  confirmed_count     INTEGER NOT NULL DEFAULT 1 CHECK (confirmed_count >= 1),
+  created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at          TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (normalized_raw_line, merchant_key)
+);
+CREATE INDEX IF NOT EXISTS idx_product_alias_lookup
+  ON product_aliases(normalized_raw_line, merchant_key);
 """
 
 
@@ -135,8 +154,22 @@ def connect(path: str | Path | None = None) -> Iterator[sqlite3.Connection]:
 
 def init_database(path: str | Path | None = None) -> Path:
     resolved_path = database_path(path)
-    with connect(resolved_path) as connection:
+    with connect(resolved_path) as connection, connection:
         connection.executescript(SCHEMA)
+        # Additive migration for databases created before recognizer-specific
+        # cache keys preserved the engine-independent image digest separately.
+        receipt_columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(receipts)").fetchall()
+        }
+        if "image_content_hash" not in receipt_columns:
+            connection.execute(
+                "ALTER TABLE receipts ADD COLUMN image_content_hash TEXT"
+            )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_receipts_content_hash "
+            "ON receipts(image_content_hash)"
+        )
     return resolved_path
 
 
