@@ -94,10 +94,23 @@ async def scan_receipt(image: UploadFile = File(...)) -> dict[str, object]:
             category_max = CATEGORY_MAX_DAYS.get(
                 item.category, UNKNOWN_CATEGORY_MAX_DAYS
             )
-            item_payload["storage"]["duration_days"] = max(
+            clamped_duration = max(
                 GLOBAL_MIN_DAYS,
                 min(GLOBAL_MAX_DAYS, category_max, item.storage.duration_days),
             )
+            item_payload["storage"]["duration_days"] = clamped_duration
+            if item.eat_by_window is not None:
+                clamped_end = max(
+                    0, min(clamped_duration, item.eat_by_window.end_days)
+                )
+                item_payload["eat_by_window"].update(
+                    {
+                        "start_days": max(
+                            0, min(clamped_end, item.eat_by_window.start_days)
+                        ),
+                        "end_days": clamped_end,
+                    }
+                )
         item_payload.update(
             {
                 "item_id": index,

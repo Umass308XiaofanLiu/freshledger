@@ -141,6 +141,31 @@ def test_scan_clamps_llm_storage_duration(
     assert item["shelf_life_source"] == "llm_clamped"
 
 
+def test_scan_clamps_eat_by_window_to_storage_duration(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parsed = parsed_receipt()
+    parsed.items[0].category = "seafood"  # type: ignore[assignment]
+    assert parsed.items[0].storage is not None
+    parsed.items[0].storage.duration_days = 900
+    parsed.items[0].eat_by_window = EatByWindow(start_days=800, end_days=900)
+
+    async def fake_parse(_jpeg_bytes: bytes) -> ReceiptParse:
+        return parsed
+
+    monkeypatch.setattr(receipts, "parse_receipt_image", fake_parse)
+    response = client.post(
+        "/v1/receipts/scan",
+        headers={"Authorization": "Bearer test-demo-token"},
+        files={"image": ("receipt.jpg", make_jpeg(), "image/jpeg")},
+    )
+
+    assert response.status_code == 201
+    item = response.json()["items"][0]
+    assert item["storage"]["duration_days"] == 3
+    assert item["eat_by_window"] == {"start_days": 3, "end_days": 3}
+
+
 def test_prepare_image_downscales_to_server_limits() -> None:
     prepared = prepare_receipt_image(make_jpeg(width=2400, height=4000))
     with Image.open(BytesIO(prepared)) as image:
