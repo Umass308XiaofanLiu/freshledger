@@ -97,6 +97,50 @@ def test_scan_returns_structured_draft(
     assert payload["items"][0]["line_total"] == 3.49
 
 
+@pytest.mark.parametrize(
+    ("category", "duration_days", "expected_days"),
+    [
+        ("produce", 0, 1),
+        ("seafood", 900, 3),
+        ("meat", 900, 5),
+        ("dairy", 900, 14),
+        ("deli", 900, 5),
+        ("produce", 900, 14),
+        ("bakery", 900, 7),
+        ("frozen", 900, 270),
+        ("beverage", 900, 21),
+        ("pantry_staple", 900, 365),
+        ("unknown", 900, 3),
+    ],
+)
+def test_scan_clamps_llm_storage_duration(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    category: str,
+    duration_days: int,
+    expected_days: int,
+) -> None:
+    parsed = parsed_receipt()
+    parsed.items[0].category = category  # type: ignore[assignment]
+    assert parsed.items[0].storage is not None
+    parsed.items[0].storage.duration_days = duration_days
+
+    async def fake_parse(_jpeg_bytes: bytes) -> ReceiptParse:
+        return parsed
+
+    monkeypatch.setattr(receipts, "parse_receipt_image", fake_parse)
+    response = client.post(
+        "/v1/receipts/scan",
+        headers={"Authorization": "Bearer test-demo-token"},
+        files={"image": ("receipt.jpg", make_jpeg(), "image/jpeg")},
+    )
+
+    assert response.status_code == 201
+    item = response.json()["items"][0]
+    assert item["storage"]["duration_days"] == expected_days
+    assert item["shelf_life_source"] == "llm_clamped"
+
+
 def test_prepare_image_downscales_to_server_limits() -> None:
     prepared = prepare_receipt_image(make_jpeg(width=2400, height=4000))
     with Image.open(BytesIO(prepared)) as image:
@@ -108,4 +152,3 @@ def test_prepare_image_rejects_non_image() -> None:
     with pytest.raises(Exception) as exc_info:
         prepare_receipt_image(b"not an image")
     assert getattr(exc_info.value, "code", None) == "UNSUPPORTED_IMAGE"
-

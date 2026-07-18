@@ -17,6 +17,21 @@ router = APIRouter(
     dependencies=[Depends(require_demo_token)],
 )
 
+CATEGORY_MAX_DAYS = {
+    "seafood": 3,
+    "meat": 5,
+    "dairy": 14,
+    "deli": 5,
+    "produce": 14,
+    "bakery": 7,
+    "frozen": 270,
+    "beverage": 21,
+    "pantry_staple": 365,
+}
+GLOBAL_MIN_DAYS = 1
+GLOBAL_MAX_DAYS = 730
+UNKNOWN_CATEGORY_MAX_DAYS = 3
+
 
 def _reconcile(parsed: ReceiptParse) -> dict[str, float | str | None]:
     computed = round(sum(item.line_total for item in parsed.items), 2)
@@ -75,12 +90,20 @@ async def scan_receipt(image: UploadFile = File(...)) -> dict[str, object]:
     items: list[dict[str, object]] = []
     for index, item in enumerate(parsed.items, start=1):
         item_payload = item.model_dump(mode="json")
+        if item.storage is not None:
+            category_max = CATEGORY_MAX_DAYS.get(
+                item.category, UNKNOWN_CATEGORY_MAX_DAYS
+            )
+            item_payload["storage"]["duration_days"] = max(
+                GLOBAL_MIN_DAYS,
+                min(GLOBAL_MAX_DAYS, category_max, item.storage.duration_days),
+            )
         item_payload.update(
             {
                 "item_id": index,
                 "excluded": item.category == "non_food",
                 "storage_options": None,
-                "shelf_life_source": "llm_unverified" if item.storage else None,
+                "shelf_life_source": "llm_clamped" if item.storage else None,
             }
         )
         items.append(item_payload)
@@ -94,4 +117,3 @@ async def scan_receipt(image: UploadFile = File(...)) -> dict[str, object]:
         "reconciliation": _reconcile(parsed),
         "items": items,
     }
-
