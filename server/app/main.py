@@ -32,9 +32,10 @@ async def lifespan(_app: FastAPI):
     sync_shelf_life_reference()
     if get_settings().auto_seed_demo_data:
         from .services.demo_data import database_is_empty, seed_demo_data
+        from .services.receipt_store import demo_auto_seed_is_suppressed
 
         try:
-            if database_is_empty():
+            if database_is_empty() and not demo_auto_seed_is_suppressed():
                 seed_demo_data()
         except Exception:
             logger.exception("Automatic demo seed failed; API will start with empty data")

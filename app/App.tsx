@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Image,
   type ImageSourcePropType,
@@ -38,12 +38,15 @@ import {
   getInsights,
   getMeals,
   getPantry,
+  resetAllData,
   scanDemoReceipt,
   scanReceipt,
   seedDemo,
   spoilPantryItem,
 } from './src/api';
 import { applyIdentitySafety } from './src/reviewState';
+import { beginEpoch, invalidateEpoch, isCurrentEpoch } from './src/refreshEpoch';
+import { finishReset, tryBeginReset } from './src/resetGate';
 import { palette, theme } from './src/theme';
 import type {
   InsightsResponse,
@@ -529,6 +532,10 @@ export default function App() {
   const [selectedMeal, setSelectedMeal] = useState<MealSuggestion | null>(null);
   const [busyMeal, setBusyMeal] = useState(false);
   const [dashboardRefreshing, setDashboardRefreshing] = useState(false);
+  const [resetDialogVisible, setResetDialogVisible] = useState(false);
+  const [resettingAllData, setResettingAllData] = useState(false);
+  const dashboardRefreshEpoch = useRef(0);
+  const resetInFlight = useRef(false);
 
   const selectedSample = useMemo(
     () => SAMPLES.find((sample) => sample.id === activeSample) ?? SAMPLES[0],
@@ -552,6 +559,8 @@ export default function App() {
   );
   const reviewItemCount = receipt?.items.filter((item) => item.needs_review).length ?? 0;
   const receiptProvenance = receipt ? provenanceKind(receipt) : null;
+  const resetUnavailable =
+    isWorking || dashboardRefreshing || busyPantryItemId !== null || busyMeal;
 
   const resetResult = () => {
     setReceipt(null);
@@ -695,30 +704,38 @@ export default function App() {
     });
   };
 
-  const refreshDashboard = async () => {
-    const [pantryResult, mealsResult, insightsResult] = await Promise.allSettled([
-      getPantry(),
-      getMeals(),
-      getInsights(),
-    ]);
-    if (pantryResult.status === 'fulfilled') setPantry(pantryResult.value);
-    if (mealsResult.status === 'fulfilled') setMeals(mealsResult.value);
-    if (insightsResult.status === 'fulfilled') setInsights(insightsResult.value);
-    const failure = [pantryResult, mealsResult, insightsResult].find(
-      (result) => result.status === 'rejected',
-    );
-    if (failure?.status === 'rejected') throw failure.reason;
+  const refreshDashboard = async (): Promise<boolean> => {
+    const refreshEpoch = beginEpoch(dashboardRefreshEpoch);
+    setDashboardRefreshing(true);
+    try {
+      const [pantryResult, mealsResult, insightsResult] = await Promise.allSettled([
+        getPantry(),
+        getMeals(),
+        getInsights(),
+      ]);
+      if (!isCurrentEpoch(dashboardRefreshEpoch, refreshEpoch)) return false;
+
+      if (pantryResult.status === 'fulfilled') setPantry(pantryResult.value);
+      if (mealsResult.status === 'fulfilled') setMeals(mealsResult.value);
+      if (insightsResult.status === 'fulfilled') setInsights(insightsResult.value);
+      const failure = [pantryResult, mealsResult, insightsResult].find(
+        (result) => result.status === 'rejected',
+      );
+      if (failure?.status === 'rejected') throw failure.reason;
+      return true;
+    } finally {
+      if (isCurrentEpoch(dashboardRefreshEpoch, refreshEpoch)) {
+        setDashboardRefreshing(false);
+      }
+    }
   };
 
   const retryDashboard = async () => {
     setErrorMessage(null);
-    setDashboardRefreshing(true);
     try {
       await refreshDashboard();
     } catch (error) {
       setErrorMessage(`Your receipt is saved, but the dashboard could not refresh. ${errorCopy(error)}`);
-    } finally {
-      setDashboardRefreshing(false);
     }
   };
 
@@ -731,7 +748,8 @@ export default function App() {
       const result = await seedDemo();
       seeded = true;
       setScanState('confirmed');
-      await refreshDashboard();
+      const refreshed = await refreshDashboard();
+      if (!refreshed) return;
       setFeedbackMessage(
         `Judge demo loaded — ${result.receipts} receipts and ${result.pantry_items} pantry items, with 0 AI calls.`,
       );
@@ -745,6 +763,46 @@ export default function App() {
         setErrorMessage(errorCopy(error));
         setScanState('error');
       }
+    }
+  };
+
+  const confirmResetAllData = async () => {
+    if (resetUnavailable || !tryBeginReset(resetInFlight)) return;
+    invalidateEpoch(dashboardRefreshEpoch);
+    setDashboardRefreshing(false);
+    setResettingAllData(true);
+    setErrorMessage(null);
+    setFeedbackMessage(null);
+    try {
+      await resetAllData();
+
+      setReceipt(null);
+      setPreviewSource(null);
+      setPantry(null);
+      setMeals(null);
+      setInsights(null);
+      setSelectedMeal(null);
+      setBusyPantryItemId(null);
+      setScanState('confirmed');
+
+      try {
+        const refreshed = await refreshDashboard();
+        if (!refreshed) return;
+        setFeedbackMessage(
+          'All FreshLedger data was reset — receipts, pantry, waste history, and learned corrections are empty.',
+        );
+      } catch (error) {
+        setScanState('idle');
+        setErrorMessage(
+          `All data was reset, but the empty dashboard could not refresh. ${errorCopy(error)}`,
+        );
+      }
+    } catch (error) {
+      setErrorMessage(`Could not reset FreshLedger. ${errorCopy(error)}`);
+    } finally {
+      finishReset(resetInFlight);
+      setResettingAllData(false);
+      setResetDialogVisible(false);
     }
   };
 
@@ -928,6 +986,17 @@ export default function App() {
                     style={styles.secondaryDemoButton}
                   >
                     Open full judge demo
+                  </Button>
+                  <Button
+                    mode="outlined"
+                    icon="database-remove-outline"
+                    textColor={palette.danger}
+                    onPress={() => setResetDialogVisible(true)}
+                    loading={resettingAllData}
+                    disabled={resetUnavailable || resettingAllData}
+                    style={styles.resetDataButton}
+                  >
+                    Reset all data
                   </Button>
                   <Text variant="bodySmall" style={styles.disclosure}>
                     Synthetic samples · saved parses · no OpenAI API call. The full demo reloads all three fixtures before opening the dashboard.
@@ -1368,6 +1437,41 @@ export default function App() {
                 </Button>
               </Dialog.Actions>
             </Dialog>
+            <Dialog
+              visible={resetDialogVisible}
+              onDismiss={() => {
+                if (!resettingAllData) setResetDialogVisible(false);
+              }}
+            >
+              <Dialog.Icon icon="alert-outline" color={palette.danger} />
+              <Dialog.Title>Reset all FreshLedger data?</Dialog.Title>
+              <Dialog.Content>
+                <Text variant="bodyMedium">
+                  This clears the current FreshLedger data, including receipts, pantry items, waste and purchase history, and learned merchant corrections.
+                </Text>
+                <Text variant="bodyMedium" style={styles.resetWarning}>
+                  This cannot be undone. Loading the judge demo later creates a fresh sample
+                  dataset; it does not restore deleted history.
+                </Text>
+              </Dialog.Content>
+              <Dialog.Actions>
+                <Button
+                  onPress={() => setResetDialogVisible(false)}
+                  disabled={resettingAllData}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  icon="delete-alert-outline"
+                  textColor={palette.danger}
+                  onPress={confirmResetAllData}
+                  loading={resettingAllData}
+                  disabled={resetUnavailable || resettingAllData}
+                >
+                  Reset all data
+                </Button>
+              </Dialog.Actions>
+            </Dialog>
           </Portal>
           <Snackbar
             visible={feedbackMessage !== null}
@@ -1417,6 +1521,8 @@ const styles = StyleSheet.create({
   sampleThumb: { width: '100%', height: 128, borderRadius: 8, marginBottom: 10 },
   primaryButton: { minHeight: 48 },
   secondaryDemoButton: { marginTop: 10 },
+  resetDataButton: { marginTop: 8, borderColor: palette.danger },
+  resetWarning: { color: palette.danger, fontWeight: '700', marginTop: 12 },
   futureCard: { borderColor: '#CBD5E1' },
   futureButton: { marginTop: 18 },
   disclosure: { color: palette.muted, textAlign: 'center', marginTop: 10 },

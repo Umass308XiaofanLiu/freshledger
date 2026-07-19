@@ -25,6 +25,7 @@ from app.services.receipt_store import (
     list_pantry_items,
     load_receipt_draft,
     persist_receipt_draft,
+    reset_demo_data,
     spoil_pantry_item,
     upsert_product_alias,
 )
@@ -118,8 +119,45 @@ def test_init_database_configures_schema_and_pragmas(tmp_path: Path) -> None:
         "insights_cache",
         "shelf_life_reference",
         "product_aliases",
+        "app_metadata",
     } <= tables
     assert journal_mode == "wal"
+
+
+def test_reset_rolls_back_all_tables_and_suppression_on_delete_failure(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "reset-rollback.db"
+    persisted = persist_receipt_draft(
+        parsed_receipt(), image_hash="reset-rollback", database_path=path
+    )
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            """
+            CREATE TRIGGER fail_receipt_reset
+            BEFORE DELETE ON receipts
+            BEGIN
+              SELECT RAISE(ABORT, 'forced reset failure');
+            END
+            """
+        )
+
+    with pytest.raises(sqlite3.IntegrityError, match="forced reset failure"):
+        reset_demo_data(
+            database_path=path,
+            include_product_aliases=True,
+            suppress_auto_seed=True,
+        )
+
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM receipts").fetchone()[0] == 1
+        assert connection.execute(
+            "SELECT COUNT(*) FROM receipt_items WHERE receipt_id = ?",
+            (persisted.receipt_id,),
+        ).fetchone()[0] == len(persisted.item_ids)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM app_metadata"
+        ).fetchone()[0] == 0
 
 
 def test_persist_and_load_draft_uses_cents_and_real_ids(tmp_path: Path) -> None:

@@ -118,6 +118,19 @@ export interface DemoSeedResponse {
   generation: DemoGeneration;
 }
 
+export interface DemoClearResponse {
+  reset: true;
+  deleted: {
+    receipts: number;
+    receipt_items: number;
+    pantry_items: number;
+    waste_events: number;
+    meal_suggestions: number;
+    insights_cache: number;
+    product_aliases: number;
+  };
+}
+
 export interface MealUse {
   pantry_item_id: number;
   name: string;

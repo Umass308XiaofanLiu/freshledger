@@ -15,6 +15,7 @@ from .receipt_store import (
     confirm_receipt,
     persist_receipt_draft,
     reset_demo_data,
+    set_demo_auto_seed_suppressed,
 )
 from .shelf_life import resolve_item
 
@@ -107,6 +108,10 @@ def seed_demo_data(*, database_path: str | Path | None = None) -> DemoSeedResult
         # The cache is deterministic and zero-token; warming it keeps the first
         # judge-facing Meals visit instant without putting AI on the boot path.
         get_meals_today(database_path=database_path)
+        # An explicit successful seed restores the configured startup behavior.
+        # Keep a prior user-clear suppression marker on failure so a restart
+        # cannot unexpectedly repopulate the ledger.
+        set_demo_auto_seed_suppressed(False, database_path=database_path)
     except Exception:
         # Never leave an apparently initialized, half-seeded database. Startup
         # can safely retry while the receipts table remains empty.

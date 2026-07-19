@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, Request, status
 from ..auth import require_admin_token, require_demo_token
 from ..errors import AppError
 from ..models import (
+    DemoClearRequest,
+    DemoClearResponse,
     DemoGeneration,
     DemoSeedRequest,
     DemoSeedResponse,
@@ -86,8 +88,23 @@ async def seed_demo(
     )
 
 
+@router.post("/clear", response_model=DemoClearResponse)
+@limiter.limit(demo_admin_limit)
+async def clear_user_data(
+    request: Request, payload: DemoClearRequest
+) -> DemoClearResponse:
+    del payload  # Strict validation above is the destructive-action confirmation.
+    return DemoClearResponse(
+        deleted=reset_demo_data(
+            include_product_aliases=True,
+            suppress_auto_seed=True,
+        )
+    )
+
+
 @router.post("/reset", dependencies=[Depends(require_admin_token)])
 @limiter.limit(demo_admin_limit)
 async def reset_demo(request: Request) -> dict[str, bool]:
-    reset_demo_data()
+    # Administrative reset restores the deployment's configured boot behavior.
+    reset_demo_data(suppress_auto_seed=False)
     return {"reset": True}

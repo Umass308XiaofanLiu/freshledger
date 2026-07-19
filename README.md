@@ -32,6 +32,10 @@ even if a server administrator configures the generic route for OpenAI.
 - Freshness-ranked pantry, deterministic rescue meals, and consumption actions.
 - Exact waste-cost tracking and history-derived purchase advice.
 - Merchant-scoped learning from explicitly confirmed name corrections only.
+- Guarded `Reset all data` control that atomically clears mutable receipts,
+  pantry, waste, caches, and learned corrections after explicit confirmation.
+  The empty state survives server restarts; the judge dataset returns only when
+  it is explicitly loaded again.
 
 ## Quick start — no API key
 
@@ -138,13 +142,15 @@ cd server
 .\.venv\Scripts\python.exe -m pytest -q
 
 cd ..\app
+npm test
 npx tsc --noEmit
 npx expo-doctor
 npx expo export --platform web
 ```
 
-Current result: **132 server tests passed**, Expo TypeScript passed, Expo Doctor
-passed **20/20**, and the SDK 57 Web production export bundled 528 modules.
+Current result: **139 server tests passed**, **6 app tests passed**, Expo
+TypeScript passed, Expo Doctor passed **20/20**, and the SDK 57 Web production
+export bundled 531 modules.
 A browser end-to-end test also completed Local OCR upload → 5-item review →
 confirm → pantry, while `ai_call_usage` remained zero.
 
