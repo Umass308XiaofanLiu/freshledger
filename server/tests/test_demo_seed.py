@@ -53,7 +53,14 @@ def test_seed_endpoint_is_zero_token_repeatable_and_self_healing(
         }
         ledger = client.get("/v1/receipts", headers=_auth()).json()
         assert ledger["summary"]["receipt_count"] == 3
-        assert [receipt["receipt_id"] for receipt in ledger["receipts"]] == [3, 2, 1]
+        assert [
+            (receipt["receipt_id"], receipt["purchased_at"])
+            for receipt in ledger["receipts"]
+        ] == [
+            (1, "2026-07-19"),
+            (3, "2026-07-16"),
+            (2, "2026-07-14"),
+        ]
         pantry = client.get("/v1/pantry", headers=_auth()).json()
         assert len(pantry["items"]) == 19
 

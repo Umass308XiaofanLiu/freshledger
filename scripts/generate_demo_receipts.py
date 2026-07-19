@@ -92,8 +92,8 @@ RECEIPTS = (
         seed=112358,
         store_name="Fresh Basket Lab",
         address="101 Demo Avenue  |  Testville, MA 01001",
-        purchased_at="2026-07-12",
-        display_date="07/12/2026",
+        purchased_at="2026-07-19",
+        display_date="07/19/2026",
         display_time="05:42 PM",
         subtotal=23.80,
         tax=0.00,
@@ -207,7 +207,7 @@ RECEIPTS = (
             item(
                 "FROZEN MIXED BERRIES      8.99",
                 "Frozen mixed berries",
-                "frozen_mixed_berries",
+                "frozen_berries",
                 1,
                 "pack",
                 8.99,
@@ -220,7 +220,7 @@ RECEIPTS = (
             item(
                 "LONG GRAIN RICE 5LB       4.79",
                 "Long-grain rice",
-                "dry_white_rice",
+                "white_rice",
                 1,
                 "pack",
                 4.79,
@@ -233,7 +233,7 @@ RECEIPTS = (
             item(
                 "CANNED BLACK BEANS X3     3.87",
                 "Canned black beans",
-                "canned_black_beans",
+                "canned_beans",
                 3,
                 "each",
                 1.29,
@@ -259,7 +259,7 @@ RECEIPTS = (
             item(
                 "PAPER TOWELS 6PK          7.49",
                 "Paper towels",
-                "paper_towels",
+                None,
                 1,
                 "pack",
                 7.49,
@@ -286,7 +286,7 @@ RECEIPTS = (
             item(
                 "SALMON FILLET 1.18LB     14.15",
                 "Salmon fillet",
-                "raw_salmon",
+                "fresh_salmon",
                 1.18,
                 "lb",
                 11.99,
@@ -299,7 +299,7 @@ RECEIPTS = (
             item(
                 "GROUND BEEF 1.35LB        8.76",
                 "Ground beef",
-                "raw_ground_beef",
+                "ground_beef",
                 1.35,
                 "lb",
                 6.49,
@@ -351,7 +351,7 @@ RECEIPTS = (
             item(
                 "CHEDDAR CHEESE 8OZ        5.99",
                 "Cheddar cheese",
-                "cheddar_cheese",
+                "hard_cheese",
                 1,
                 "each",
                 5.99,
@@ -377,7 +377,7 @@ RECEIPTS = (
             item(
                 "EXTRA VIRGIN OLIVE OIL   12.99",
                 "Extra-virgin olive oil",
-                "olive_oil",
+                "cooking_oil",
                 1,
                 "each",
                 12.99,
