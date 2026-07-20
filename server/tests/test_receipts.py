@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from app.config import get_settings
+from app.db import connect, sync_shelf_life_reference
 from app.main import app
 from app.models import EatByWindow, ReceiptLineItem, ReceiptParse, StoragePlan
 from app.routers import receipts
@@ -1090,6 +1091,14 @@ def test_admin_reset_clears_repeatable_demo_state(client: TestClient) -> None:
     headers = {"Authorization": "Bearer test-demo-token"}
     first = client.post("/v1/demo/receipts/r1/scan", headers=headers)
     assert first.status_code == 201
+    upsert_product_alias(
+        "ORG BABY SPIN 5OZ",
+        canonical_key="spinach",
+        display_name="Spinach",
+        category="produce",
+        is_perishable=True,
+        merchant_name="Fixture Market",
+    )
 
     missing_admin = client.post("/v1/demo/reset", headers=headers)
     assert missing_admin.status_code == 401
@@ -1102,10 +1111,105 @@ def test_admin_reset_clears_repeatable_demo_state(client: TestClient) -> None:
     assert reset.json() == {"reset": True}
     assert client.get("/v1/receipts", headers=headers).json()["receipts"] == []
     assert client.get("/v1/pantry", headers=headers).json()["items"] == []
+    assert find_product_alias(
+        "ORG BABY SPIN 5OZ", merchant_name="Fixture Market"
+    ) is not None
 
     second = client.post("/v1/demo/receipts/r1/scan", headers=headers)
     assert second.status_code == 201
     assert second.json()["receipt_id"] == 1
+
+
+def test_user_clear_requires_exact_confirmation_before_deleting(
+    client: TestClient,
+) -> None:
+    headers = {"Authorization": "Bearer test-demo-token"}
+    first = client.post("/v1/demo/receipts/r1/scan", headers=headers)
+    assert first.status_code == 201
+
+    unauthorized = client.post(
+        "/v1/demo/clear",
+        json={"confirmation": "RESET_ALL_DATA"},
+    )
+    missing = client.post("/v1/demo/clear", headers=headers, json={})
+    wrong = client.post(
+        "/v1/demo/clear",
+        headers=headers,
+        json={"confirmation": "reset_all_data"},
+    )
+    assert unauthorized.status_code == 401
+    assert missing.status_code == 422
+    assert wrong.status_code == 422
+    assert client.get("/v1/receipts", headers=headers).json()["receipts"] == []
+    assert load_receipt_draft(first.json()["receipt_id"]) is not None
+
+
+def test_user_clear_atomically_removes_all_mutable_user_data(
+    client: TestClient,
+) -> None:
+    headers = {"Authorization": "Bearer test-demo-token"}
+    seeded = client.post(
+        "/v1/demo/seed",
+        headers=headers,
+        json={"profile": "judge"},
+    )
+    assert seeded.status_code == 200
+    pantry_id = client.get("/v1/pantry", headers=headers).json()["items"][0][
+        "pantry_item_id"
+    ]
+    spoiled = client.post(
+        f"/v1/pantry/{pantry_id}/spoil",
+        headers=headers,
+        json={"portion": 1},
+    )
+    assert spoiled.status_code == 200
+    upsert_product_alias(
+        "ORG BABY SPIN 5OZ",
+        canonical_key="spinach",
+        display_name="Spinach",
+        category="produce",
+        is_perishable=True,
+        merchant_name="Fixture Market",
+    )
+    reference_count = sync_shelf_life_reference()
+    with connect() as connection, connection:
+        connection.execute(
+            "INSERT INTO insights_cache (data_hash, payload_json) VALUES (?, ?)",
+            ("clear-test", "{}"),
+        )
+        connection.execute(
+            "INSERT INTO ai_call_usage (operation) VALUES (?)",
+            ("clear-test",),
+        )
+
+    response = client.post(
+        "/v1/demo/clear",
+        headers=headers,
+        json={"confirmation": "RESET_ALL_DATA"},
+    )
+
+    assert response.status_code == 200
+    deleted = response.json()["deleted"]
+    assert response.json()["reset"] is True
+    assert deleted["receipts"] == 3
+    assert deleted["receipt_items"] > 0
+    assert deleted["pantry_items"] > 0
+    assert deleted["waste_events"] == 1
+    assert deleted["meal_suggestions"] == 1
+    assert deleted["insights_cache"] == 1
+    assert deleted["product_aliases"] == 1
+
+    with connect() as connection:
+        for table in deleted:
+            assert connection.execute(
+                f"SELECT COUNT(*) FROM {table}"
+            ).fetchone()[0] == 0
+        assert connection.execute(
+            "SELECT COUNT(*) FROM shelf_life_reference"
+        ).fetchone()[0] == reference_count
+        assert connection.execute(
+            "SELECT COUNT(*) FROM ai_call_usage"
+        ).fetchone()[0] == 1
 
 
 def test_prepare_image_downscales_to_server_limits() -> None:

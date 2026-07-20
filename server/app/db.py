@@ -130,6 +130,12 @@ CREATE TABLE IF NOT EXISTS product_aliases (
 );
 CREATE INDEX IF NOT EXISTS idx_product_alias_lookup
   ON product_aliases(normalized_raw_line, merchant_key);
+
+CREATE TABLE IF NOT EXISTS app_metadata (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 

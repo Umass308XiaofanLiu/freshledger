@@ -267,6 +267,25 @@ class DemoSeedResponse(StrictModel):
     generation: DemoGeneration
 
 
+class DemoClearRequest(StrictModel):
+    confirmation: Literal["RESET_ALL_DATA"]
+
+
+class DemoClearCounts(StrictModel):
+    receipts: int = Field(ge=0)
+    receipt_items: int = Field(ge=0)
+    pantry_items: int = Field(ge=0)
+    waste_events: int = Field(ge=0)
+    meal_suggestions: int = Field(ge=0)
+    insights_cache: int = Field(ge=0)
+    product_aliases: int = Field(ge=0)
+
+
+class DemoClearResponse(StrictModel):
+    reset: Literal[True] = True
+    deleted: DemoClearCounts
+
+
 class InsightsPeriod(StrictModel):
     from_date: str = Field(alias="from")
     to: str

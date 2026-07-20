@@ -125,6 +125,9 @@ class ProductAliasRecord:
     confirmed_count: int
 
 
+DEMO_AUTO_SEED_SUPPRESSION_KEY = "demo_auto_seed_suppressed"
+
+
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
@@ -768,18 +771,98 @@ def waste_total_cents(*, database_path: str | Path | None = None) -> int:
     return int(row["total"])
 
 
-def reset_demo_data(*, database_path: str | Path | None = None) -> None:
+def demo_auto_seed_is_suppressed(
+    *, database_path: str | Path | None = None
+) -> bool:
+    init_database(database_path)
+    with connect(database_path) as connection:
+        row = connection.execute(
+            "SELECT value FROM app_metadata WHERE key = ?",
+            (DEMO_AUTO_SEED_SUPPRESSION_KEY,),
+        ).fetchone()
+    return row is not None and row["value"] == "1"
+
+
+def set_demo_auto_seed_suppressed(
+    suppressed: bool, *, database_path: str | Path | None = None
+) -> None:
     init_database(database_path)
     with connect(database_path) as connection, connection:
-        for table in (
-            "meal_suggestions",
-            "insights_cache",
-            "waste_events",
-            "pantry_items",
-            "receipt_items",
-            "receipts",
-        ):
-            connection.execute(f"DELETE FROM {table}")
+        if suppressed:
+            connection.execute(
+                """
+                INSERT INTO app_metadata (key, value) VALUES (?, '1')
+                ON CONFLICT(key) DO UPDATE SET
+                  value = excluded.value,
+                  updated_at = datetime('now')
+                """,
+                (DEMO_AUTO_SEED_SUPPRESSION_KEY,),
+            )
+        else:
+            connection.execute(
+                "DELETE FROM app_metadata WHERE key = ?",
+                (DEMO_AUTO_SEED_SUPPRESSION_KEY,),
+            )
+
+
+def reset_demo_data(
+    *,
+    database_path: str | Path | None = None,
+    include_product_aliases: bool = False,
+    suppress_auto_seed: bool | None = None,
+) -> dict[str, int]:
+    """Atomically remove mutable user/demo data and report deleted row counts.
+
+    Reference data and AI usage accounting intentionally survive every reset.
+    The latter prevents a reset from bypassing the configured daily call limit.
+    Confirmed aliases also survive ordinary demo/admin resets unless the user
+    explicitly requests the full clear operation.
+    """
+
+    init_database(database_path)
+    tables = [
+        "meal_suggestions",
+        "insights_cache",
+        "waste_events",
+        "pantry_items",
+        "receipt_items",
+        "receipts",
+    ]
+    if include_product_aliases:
+        tables.append("product_aliases")
+    with connect(database_path) as connection:
+        try:
+            # Lock writers before counting so the response describes exactly
+            # the rows removed by this transaction.
+            connection.execute("BEGIN IMMEDIATE")
+            deleted = {
+                table: int(
+                    connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                )
+                for table in tables
+            }
+            for table in tables:
+                connection.execute(f"DELETE FROM {table}")
+            if suppress_auto_seed is True:
+                connection.execute(
+                    """
+                    INSERT INTO app_metadata (key, value) VALUES (?, '1')
+                    ON CONFLICT(key) DO UPDATE SET
+                      value = excluded.value,
+                      updated_at = datetime('now')
+                    """,
+                    (DEMO_AUTO_SEED_SUPPRESSION_KEY,),
+                )
+            elif suppress_auto_seed is False:
+                connection.execute(
+                    "DELETE FROM app_metadata WHERE key = ?",
+                    (DEMO_AUTO_SEED_SUPPRESSION_KEY,),
+                )
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+    return deleted
 
 
 def _change_pantry_quantity(

@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 
 import type {
   ConfirmReceiptResponse,
+  DemoClearResponse,
   DemoSeedResponse,
   InsightsResponse,
   MealConsumeResponse,
@@ -12,6 +13,7 @@ import type {
   ReceiptItem,
   SpoilPantryResponse,
 } from './types';
+import { buildResetAllDataRequest } from './resetContract';
 
 function inferredDevelopmentApiUrl(): string {
   const hostUri = Constants.expoConfig?.hostUri;
@@ -142,6 +144,11 @@ export function seedDemo(): Promise<DemoSeedResponse> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ profile: 'judge' }),
   });
+}
+
+export function resetAllData(): Promise<DemoClearResponse> {
+  const { path, init } = buildResetAllDataRequest();
+  return request<DemoClearResponse>(path, init);
 }
 
 export function confirmReceipt(receipt: ReceiptDraft): Promise<ConfirmReceiptResponse> {

@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.config import get_settings
 from app.db import connect
 from app.main import app
+from app.services.receipt_store import find_product_alias, upsert_product_alias
 
 
 @pytest.fixture
@@ -52,7 +53,14 @@ def test_seed_endpoint_is_zero_token_repeatable_and_self_healing(
         }
         ledger = client.get("/v1/receipts", headers=_auth()).json()
         assert ledger["summary"]["receipt_count"] == 3
-        assert [receipt["receipt_id"] for receipt in ledger["receipts"]] == [3, 2, 1]
+        assert [
+            (receipt["receipt_id"], receipt["purchased_at"])
+            for receipt in ledger["receipts"]
+        ] == [
+            (1, "2026-07-19"),
+            (3, "2026-07-16"),
+            (2, "2026-07-14"),
+        ]
         pantry = client.get("/v1/pantry", headers=_auth()).json()
         assert len(pantry["items"]) == 19
 
@@ -151,3 +159,111 @@ def test_startup_does_not_replace_nonempty_database(
             "SELECT id, status FROM receipts ORDER BY id"
         ).fetchall()
     assert [(row["id"], row["status"]) for row in rows] == [(draft_id, "draft")]
+
+
+def test_user_clear_persistently_suppresses_startup_auto_seed(
+    configured_seed: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AUTO_SEED_DEMO_DATA", "true")
+    get_settings.cache_clear()
+
+    with TestClient(app) as client:
+        assert client.get("/v1/receipts", headers=_auth()).json()["summary"][
+            "receipt_count"
+        ] == 3
+        cleared = client.post(
+            "/v1/demo/clear",
+            headers=_auth(),
+            json={"confirmation": "RESET_ALL_DATA"},
+        )
+        assert cleared.status_code == 200
+
+    with TestClient(app) as restarted:
+        ledger = restarted.get("/v1/receipts", headers=_auth()).json()
+        assert ledger["summary"]["receipt_count"] == 0
+
+    with connect(configured_seed) as connection:
+        marker = connection.execute(
+            "SELECT value FROM app_metadata WHERE key = 'demo_auto_seed_suppressed'"
+        ).fetchone()
+    assert marker is not None
+    assert marker["value"] == "1"
+
+
+def test_explicit_seed_clears_user_auto_seed_suppression(
+    configured_seed: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AUTO_SEED_DEMO_DATA", "true")
+    get_settings.cache_clear()
+
+    with TestClient(app) as client:
+        cleared = client.post(
+            "/v1/demo/clear",
+            headers=_auth(),
+            json={"confirmation": "RESET_ALL_DATA"},
+        )
+        assert cleared.status_code == 200
+        seeded = client.post(
+            "/v1/demo/seed",
+            headers=_auth(),
+            json={"profile": "judge"},
+        )
+        assert seeded.status_code == 200
+        assert seeded.json()["receipts"] == 3
+
+    with connect(configured_seed) as connection:
+        marker = connection.execute(
+            "SELECT value FROM app_metadata WHERE key = 'demo_auto_seed_suppressed'"
+        ).fetchone()
+    assert marker is None
+
+
+def test_admin_reset_restores_configured_auto_seed_behavior(
+    configured_seed: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AUTO_SEED_DEMO_DATA", "true")
+    get_settings.cache_clear()
+
+    with TestClient(app) as client:
+        cleared = client.post(
+            "/v1/demo/clear",
+            headers=_auth(),
+            json={"confirmation": "RESET_ALL_DATA"},
+        )
+        assert cleared.status_code == 200
+        reset = client.post(
+            "/v1/demo/reset",
+            headers={**_auth(), "X-Admin-Token": "seed-admin-token"},
+        )
+        assert reset.status_code == 200
+
+    with TestClient(app) as restarted:
+        ledger = restarted.get("/v1/receipts", headers=_auth()).json()
+        assert ledger["summary"]["receipt_count"] == 3
+
+
+def test_explicit_seed_preserves_confirmed_product_aliases(
+    configured_seed: Path,
+) -> None:
+    upsert_product_alias(
+        "ORG BABY SPIN 5OZ",
+        canonical_key="spinach",
+        display_name="Spinach",
+        category="produce",
+        is_perishable=True,
+        merchant_name="Fixture Market",
+    )
+
+    with TestClient(app) as client:
+        seeded = client.post(
+            "/v1/demo/seed",
+            headers=_auth(),
+            json={"profile": "judge"},
+        )
+        assert seeded.status_code == 200
+
+    alias = find_product_alias(
+        "ORG BABY SPIN 5OZ", merchant_name="Fixture Market"
+    )
+    assert alias is not None
+    assert alias.canonical_key == "spinach"

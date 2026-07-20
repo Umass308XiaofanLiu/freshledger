@@ -1,0 +1,92 @@
+1
+00:00:00,400 --> 00:00:04,000
+FreshLedger turns receipts into freshness-aware inventory.
+
+2
+00:00:04,000 --> 00:00:08,730
+GPT-5.6 Sol in Codex built it almost end to end.
+
+3
+00:00:09,000 --> 00:00:13,500
+We began with a product idea and non-negotiable safety rules.
+
+4
+00:00:13,500 --> 00:00:23,500
+The agent read the specification, designed the Expo, FastAPI, and SQLite architecture,
+and implemented this receipt-to-ledger spine.
+
+5
+00:00:23,500 --> 00:00:27,410
+Local OCR returns five editable items from the photo with no cloud call.
+
+6
+00:00:28,000 --> 00:00:34,000
+GPT-5.6 Sol also built strict grounding: an item must match our shelf-life reference
+before receiving advice.
+
+7
+00:00:34,000 --> 00:00:41,820
+One confirmation saves the receipt and ranks the pantry by urgency,
+with conservative storage guidance.
+
+8
+00:00:44,000 --> 00:00:49,200
+The agent then implemented rescue meals and exact, integer-cent waste accounting.
+
+9
+00:00:49,200 --> 00:00:58,330
+Raw chicken is most urgent; tossing it records exactly $9.44
+and regenerates the recommendations from persisted inventory.
+
+10
+00:01:01,000 --> 00:01:09,500
+Codex connected all five promised features, while GPT-5.6 Sol traced bugs
+across the client, API, database, and safety rules.
+
+11
+00:01:09,500 --> 00:01:17,610
+The grocery story now turns real events into spending, waste,
+category breakdowns, and next-trip advice.
+
+12
+00:01:19,000 --> 00:01:28,000
+During adversarial review, GPT-5.6 Sol found duplicate-import, stale-advice,
+compound-food, cache, and concurrency failures, then converted them into regression tests and fixes.
+
+13
+00:01:28,000 --> 00:01:36,230
+The result blocks this duplicate and keeps paper towels out of the food pantry.
+
+14
+00:01:40,000 --> 00:01:46,000
+With two receipts, FreshLedger prioritizes orange juice
+and proposes meals from actual inventory.
+
+15
+00:01:46,000 --> 00:01:51,000
+Each suggestion names what it rescues and includes safety notes.
+
+16
+00:01:51,000 --> 00:02:00,000
+Choosing I made this opens an ingredient-level confirmation;
+one atomic update consumes the smoothie items and refreshes every downstream view.
+
+17
+00:02:00,000 --> 00:02:07,670
+Codex also generated fixtures and tests that verify identity, prices,
+reconciliation, and storage clamping across three standing receipts.
+
+18
+00:02:12,000 --> 00:02:20,000
+Finally, tossing the eggs raises tracked waste to $14.63,
+so advice updates from history.
+
+19
+00:02:20,000 --> 00:02:29,500
+GPT-5.6 Sol was FreshLedger's primary implementation engine through Codex,
+driving architecture, code, tests, debugging, and review fixes.
+
+20
+00:02:29,500 --> 00:02:38,810
+This zero-cloud demo runs Local OCR; the optional GPT-5.6 vision path
+uses the same strict Structured Outputs contract.
