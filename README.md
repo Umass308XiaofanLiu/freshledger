@@ -1,14 +1,36 @@
 # FreshLedger
 
+[![License: AGPL-3.0-only](https://img.shields.io/badge/License-AGPL--3.0--only-663399.svg)](LICENSE)
+
+<p align="center">
+  <a href="https://youtu.be/JBl6eh7bBk8">
+    <img src="docs/media/freshledger-youtube-thumbnail.jpg" alt="FreshLedger — one receipt, less waste" width="960">
+  </a>
+</p>
+
+<p align="center">
+  <strong><a href="https://youtu.be/JBl6eh7bBk8">Watch the 2:39 product demo on YouTube</a></strong>
+  · <a href="docs/media/freshledger-demo-cc.mp4">archived MP4</a>
+  · <a href="docs/media/freshledger-demo.en.srt">English CC file</a>
+</p>
+
 FreshLedger turns a grocery receipt into an itemized spending ledger and a
 freshness-aware food inventory. It grounds storage guidance in a curated
 USDA/FoodKeeper reference table, then helps users act before groceries become
 waste.
 
-This OpenAI Build Week 2026 project was built in the resumable Codex session
-`019f6ec9-4142-73d1-a8fe-db94c09af60b`. The submitted runtime defaults to a
-zero-cloud Local Scan Beta, while the original GPT-5.6 Structured Outputs
-adapter remains available as an explicit future integration.
+This OpenAI Build Week 2026 project began with a product brief and
+non-negotiable food-safety constraints. GPT-5.6 Sol, operating through Codex,
+served as the primary implementation engineer across architecture, Expo and
+FastAPI code, SQLite persistence, fixtures, tests, debugging, adversarial
+review fixes, and submission preparation. That work is preserved in the
+resumable Codex session `019f6ec9-4142-73d1-a8fe-db94c09af60b` and the dated Git
+history.
+
+The submitted runtime defaults to a zero-cloud Local Scan Beta, while the
+strict GPT-5.6 Structured Outputs vision adapter remains available as an
+explicit opt-in integration. The UI and every scan disclose which path
+actually ran.
 
 ## Three transparent modes
 
@@ -188,3 +210,19 @@ The `/feedback` procedure and implementation work log are maintained in
 
 Never commit `server/.env`, `app/.env`, API keys, demo/admin tokens, or local
 SQLite databases.
+
+## License, commercial use, and brand
+
+Original FreshLedger source code is Copyright (C) 2026 Xiaofan Liu and is
+licensed under **AGPL-3.0-only**. Network operators of modified versions must
+provide corresponding source as required by the license. Separate commercial
+licensing is available for organizations that need proprietary terms.
+
+Demo media under `docs/media/` and the FreshLedger name, logos, slogans, and
+distinctive brand identity are excluded from the software license and remain
+all rights reserved. Third-party components retain their own licenses,
+including the Expo notice in `app/LICENSE`.
+
+See [`LICENSE`](LICENSE), [`LICENSING.md`](LICENSING.md),
+[`TRADEMARKS.md`](TRADEMARKS.md), and [`NOTICE`](NOTICE) for the complete
+licensing boundaries.

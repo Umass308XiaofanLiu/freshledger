@@ -1,0 +1,12 @@
+FreshLedger
+Copyright (C) 2026 Xiaofan Liu
+
+Original FreshLedger source code is licensed under the GNU Affero General
+Public License, version 3 only (AGPL-3.0-only). See LICENSE and LICENSING.md.
+
+Demo media and FreshLedger branding are not included in the software license.
+See docs/media/README.md and TRADEMARKS.md.
+
+Third-party components remain subject to their own license notices. In
+particular, app/LICENSE preserves the license and copyright notice supplied by
+Expo / 650 Industries, Inc.
